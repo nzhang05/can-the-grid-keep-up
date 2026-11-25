@@ -126,3 +126,21 @@ def test_download_skips_failing_year_and_continues(tmp_path, monkeypatch):
     assert failed == ["demand_ERCO_2024.csv", "fuel_mix_ERCO_2024.csv"]
     assert (tmp_path / "demand_ERCO_2025.csv").exists()
     assert not (tmp_path / "demand_ERCO_2024.csv").exists()
+
+
+def test_fetch_window_splits_a_failing_month_and_covers_every_hour():
+    """A month that always 504s is split until the pieces succeed, with no gaps or overlaps."""
+    calls = []
+
+    def fake_fetch(route, facets, start, end, api_key, session, retries):
+        calls.append((start, end))
+        t0, t1 = pd.Timestamp(start), pd.Timestamp(end)
+        if (t1 - t0) > pd.Timedelta(days=8):   # EIA "fails" on anything over ~a week
+            raise eia930.EIAError("HTTP 504")
+        hours = pd.date_range(t0, t1, freq="h")
+        return eia930.parse_rows([_row(f"{h:%Y-%m-%dT%H}", "1") for h in hours])
+
+    df = eia930.fetch_window("r", {}, "2024-08-01T00", "2024-08-31T23", "KEY", None, fake_fetch)
+    expected = pd.date_range("2024-08-01", "2024-08-31 23:00", freq="h", tz="UTC")
+    assert list(df["timestamp_utc"]) == list(expected)
+    assert len(calls) > 1

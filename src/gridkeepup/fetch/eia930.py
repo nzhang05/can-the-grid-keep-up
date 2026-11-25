@@ -85,6 +85,7 @@ def fetch_route(
     end: str,
     api_key: str,
     session: requests.Session | None = None,
+    retries: int = RETRIES,
 ) -> pd.DataFrame:
     """Download every hourly row of ``route`` between ``start`` and ``end``.
 
@@ -108,7 +109,7 @@ def fetch_route(
     rows: list[dict] = []
     offset = 0
     while True:
-        payload = _get_json(session, url, {**base_params, "offset": offset})
+        payload = _get_json(session, url, {**base_params, "offset": offset}, retries=retries)
         response = payload.get("response", {})
         page = response.get("data", [])
         rows.extend(page)
@@ -132,12 +133,40 @@ def parse_rows(rows: list[dict]) -> pd.DataFrame:
     return df[lead + [c for c in df.columns if c not in lead]]
 
 
+QUICK_RETRIES = 4    # before splitting a window: waits 2, 4, 8 s
+HOURLY = "%Y-%m-%dT%H"
+
+
+def fetch_window(route: str, facets: dict[str, list[str]], start: str, end: str, api_key: str,
+                 session: requests.Session | None, fetch=None) -> pd.DataFrame:
+    """Fetch ``start``..``end``; if EIA keeps failing, split the window in half and recurse.
+
+    EIA sometimes returns 504s for one specific query (e.g. a whole month) while smaller
+    ones succeed. Windows of one day or less get the full retry budget before giving up.
+    """
+    fetch = fetch or fetch_route
+    t0, t1 = pd.Timestamp(start), pd.Timestamp(end)
+    hours = int((t1 - t0) / pd.Timedelta(hours=1)) + 1
+    if hours <= 24:
+        return fetch(route, facets, start, end, api_key, session, retries=RETRIES)
+    try:
+        return fetch(route, facets, start, end, api_key, session, retries=QUICK_RETRIES)
+    except EIAError:
+        mid = t0 + pd.Timedelta(hours=hours // 2 - 1)
+        print(f"    splitting {start}..{end} into smaller requests")
+        left = fetch_window(route, facets, start, mid.strftime(HOURLY), api_key, session, fetch)
+        right = fetch_window(route, facets, (mid + pd.Timedelta(hours=1)).strftime(HOURLY), end,
+                             api_key, session, fetch)
+        parts = [p for p in (left, right) if not p.empty]
+        return pd.concat(parts, ignore_index=True) if parts else parse_rows([])
+
+
 def _fetch_year_by_month(route: str, facets: dict[str, list[str]], year: int, api_key: str,
                          session: requests.Session | None) -> pd.DataFrame:
     """One request series per month: small queries finish well inside EIA's timeouts."""
     frames = []
     for start, end in month_windows(year):
-        frames.append(fetch_route(route, facets, start, end, api_key, session))
+        frames.append(fetch_window(route, facets, start, end, api_key, session))
         print(f"    {start[:7]} done", end="\r", flush=True)
     frames = [f for f in frames if not f.empty]
     return pd.concat(frames, ignore_index=True) if frames else parse_rows([])

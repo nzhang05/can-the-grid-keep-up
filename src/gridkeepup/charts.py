@@ -12,11 +12,19 @@ QUEUE_COLOR = "#2563eb"
 PEAK_COLOR = "#6b7280"
 
 
+MIN_HOURS_FOR_PEAK = 8700   # skip years with only a few hours of data (e.g. UTC/Texas edges)
+
+
 def annual_peaks(demand: pd.DataFrame) -> pd.DataFrame:
-    """Highest hourly demand per calendar year (Texas time), in GW."""
+    """Highest hourly demand per calendar year (Texas time), in GW, for near-complete years."""
     if demand.empty:
         return pd.DataFrame(columns=["year", "peak_gw", "peak_hour"])
     local = demand.assign(ts=demand["timestamp_utc"].dt.tz_convert("US/Central"))
+    years = local["ts"].dt.year
+    counts = years.value_counts()
+    local = local[years.map(counts) >= MIN_HOURS_FOR_PEAK]
+    if local.empty:
+        return pd.DataFrame(columns=["year", "peak_gw", "peak_hour"])
     idx = local.groupby(local["ts"].dt.year)["value_mwh"].idxmax().dropna()
     peaks = local.loc[idx, ["ts", "value_mwh"]]
     return pd.DataFrame({
@@ -60,7 +68,7 @@ def v0_queue_vs_peak(queue: pd.DataFrame | None = None,
     fig.add_hline(
         y=peak_gw, line={"color": PEAK_COLOR, "dash": "dash", "width": 1.5},
         annotation_text=f"All-time peak demand: {peak_gw:,.1f} GW ({peak_label})",
-        annotation_position="bottom right",
+        annotation_position="top left",
     )
     fig.update_layout(
         title={

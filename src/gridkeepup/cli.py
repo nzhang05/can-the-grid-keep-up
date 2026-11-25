@@ -5,6 +5,7 @@
   fetch eia860m         latest EIA-860M generator inventory
   fetch all             both of the above
   build                 load every input into data/grid.duckdb
+  quality               per-year data quality report for hourly demand
   chart v0              write outputs/v0_queue_vs_peak.html
 """
 
@@ -60,6 +61,20 @@ def cmd_build(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_quality(_: argparse.Namespace) -> int:
+    import pandas as pd
+
+    from gridkeepup import clean
+    from gridkeepup.fetch import eia930
+    report = clean.quality_report(clean.clean_demand(eia930.load("demand")))
+    if report.empty:
+        print("No EIA-930 demand downloaded yet. Run `gridkeepup fetch eia930`.")
+        return 1
+    with pd.option_context("display.width", 120):
+        print(report.to_string())
+    return 0
+
+
 def cmd_chart(args: argparse.Namespace) -> int:
     from gridkeepup import charts
     OUTPUTS_DIR.mkdir(exist_ok=True)
@@ -80,6 +95,7 @@ def main(argv: list[str] | None = None) -> int:
     fetch.add_argument("--overwrite", action="store_true", help="re-download existing years")
     fetch.set_defaults(fn=cmd_fetch)
     sub.add_parser("build").set_defaults(fn=cmd_build)
+    sub.add_parser("quality").set_defaults(fn=cmd_quality)
     chart = sub.add_parser("chart")
     chart.add_argument("name", choices=["v0"])
     chart.set_defaults(fn=cmd_chart)

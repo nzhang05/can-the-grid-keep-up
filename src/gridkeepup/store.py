@@ -7,7 +7,7 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 
-from gridkeepup import manual
+from gridkeepup import clean, manual
 from gridkeepup.fetch import eia860m, eia930
 from gridkeepup.paths import DB_PATH
 
@@ -24,12 +24,15 @@ def build(db_path: Path = DB_PATH) -> dict[str, int]:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     counts: dict[str, int] = {}
     with duckdb.connect(str(db_path)) as con:
+        demand_raw, fuel_raw = eia930.load("demand"), eia930.load("fuel_mix")
         tables: dict[str, pd.DataFrame] = {
             "large_load_queue": manual.large_load_queue(),
             "large_load_stages": manual.large_load_stages(),
             "reference": manual.load("ercot_reference"),
-            "eia930_demand": eia930.load("demand"),
-            "eia930_fuel_mix": eia930.load("fuel_mix"),
+            "eia930_demand": demand_raw,
+            "eia930_fuel_mix": fuel_raw,
+            "demand_clean": clean.clean_demand(demand_raw),
+            "generation_clean": clean.clean_generation(fuel_raw),
         }
         tables.update({f"eia860m_{k}": v for k, v in eia860m.load_latest().items()})
         for name, df in tables.items():

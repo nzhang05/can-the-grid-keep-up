@@ -34,16 +34,23 @@ def cmd_check(_: argparse.Namespace) -> int:
 def cmd_fetch(args: argparse.Namespace) -> int:
     hist = config.assumptions()["history"]
     region = config.assumptions()["region"]
+    ok = True
     if args.source in ("eia930", "all"):
         from gridkeepup.fetch import eia930
         print(f"EIA-930 {region['eia_respondent']} {hist['first_year']}-{hist['last_year']}")
-        eia930.download(hist["first_year"], hist["last_year"], config.get_eia_api_key(),
-                        region["eia_respondent"], overwrite=args.overwrite)
+        failed = eia930.download(hist["first_year"], hist["last_year"],
+                                 config.get_eia_api_key(), region["eia_respondent"],
+                                 overwrite=args.overwrite)
+        ok = ok and not failed
     if args.source in ("eia860m", "all"):
         from gridkeepup.fetch import eia860m
         print("EIA-860M")
-        eia860m.download_latest()
-    return 0
+        try:
+            eia860m.download_latest()
+        except RuntimeError as e:
+            print(f"  FAILED: {e}")
+            ok = False
+    return 0 if ok else 1
 
 
 def cmd_build(_: argparse.Namespace) -> int:

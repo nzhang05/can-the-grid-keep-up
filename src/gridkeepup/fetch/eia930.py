@@ -24,33 +24,48 @@ from gridkeepup.paths import EIA930_DIR
 API_BASE = "https://api.eia.gov/v2"
 PAGE_SIZE = 5000  # EIA API v2 maximum rows per request
 TIMEOUT_S = 120
-RETRIES = 5
+RETRIES = 8          # waits 2, 4, 8, 16, 32, 60, 60 s: about 3 minutes before giving up
+MAX_WAIT_S = 60
 RETRY_STATUS = (429, 500, 502, 503, 504)
 
 DEMAND_ROUTE = "electricity/rto/region-data"
 FUEL_ROUTE = "electricity/rto/fuel-type-data"
 
 
+class EIAError(RuntimeError):
+    """An EIA API failure. The message never contains the request URL (it holds your key)."""
+
+
+def _describe(params: dict) -> str:
+    start, end = params.get("start", "?"), params.get("end", "?")
+    return f"{start} to {end}, offset {params.get('offset', 0)}"
+
+
 def _get_json(session: requests.Session, url: str, params: dict,
               retries: int = RETRIES, sleep=time.sleep) -> dict:
-    """GET with retries on timeouts, dropped connections and 429/5xx (EIA's API is slow)."""
+    """GET with retries on timeouts, dropped connections and 429/5xx (EIA's API is slow).
+
+    Errors are re-raised as ``EIAError`` without the URL, so the API key is never printed.
+    """
+    problem = ""
     for attempt in range(retries):
-        last = attempt == retries - 1
         try:
             resp = session.get(url, params=params, timeout=TIMEOUT_S)
-        except (requests.Timeout, requests.ConnectionError):
-            if last:
-                raise
-            wait = 2 ** (attempt + 1)
-            print(f"    EIA API slow or unreachable, retrying in {wait}s...")
+        except (requests.Timeout, requests.ConnectionError) as e:
+            problem = type(e).__name__
+        else:
+            if resp.status_code not in RETRY_STATUS:
+                if not resp.ok:
+                    raise EIAError(f"EIA API returned HTTP {resp.status_code} for "
+                                   f"{_describe(params)}") from None
+                return resp.json()
+            problem = f"HTTP {resp.status_code}"
+        if attempt < retries - 1:
+            wait = min(2 ** (attempt + 1), MAX_WAIT_S)
+            print(f"    EIA API: {problem}, retrying in {wait}s...")
             sleep(wait)
-            continue
-        if resp.status_code in RETRY_STATUS and not last:
-            sleep(2 ** (attempt + 1))
-            continue
-        resp.raise_for_status()
-        return resp.json()
-    raise RuntimeError("unreachable")
+    raise EIAError(f"EIA API still failing after {retries} tries ({problem}) for "
+                   f"{_describe(params)}") from None
 
 
 def month_windows(year: int) -> list[tuple[str, str]]:
@@ -141,11 +156,15 @@ def fetch_fuel_mix_year(year: int, api_key: str, respondent: str = "ERCO",
 
 
 def download(first_year: int, last_year: int, api_key: str, respondent: str = "ERCO",
-             out_dir: Path = EIA930_DIR, overwrite: bool = False) -> list[Path]:
-    """Save one CSV per series per year. Skips years already on disk unless ``overwrite``."""
+             out_dir: Path = EIA930_DIR, overwrite: bool = False) -> list[str]:
+    """Save one CSV per series per year. Skips years already on disk unless ``overwrite``.
+
+    A year that keeps failing is skipped (not written) and the rest carry on; rerun to
+    fill the gaps. Returns the names of files that could not be fetched.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     session = requests.Session()
-    written: list[Path] = []
+    failed: list[str] = []
     for year in range(first_year, last_year + 1):
         for name, fn in (("demand", fetch_demand_year), ("fuel_mix", fetch_fuel_mix_year)):
             path = out_dir / f"{name}_{respondent}_{year}.csv"
@@ -153,12 +172,18 @@ def download(first_year: int, last_year: int, api_key: str, respondent: str = "E
                 print(f"  skip {path.name} (exists)")
                 continue
             print(f"  fetching {path.name}...")
-            df = fn(year, api_key, respondent, session)
+            try:
+                df = fn(year, api_key, respondent, session)
+            except EIAError as e:
+                print(f"  FAILED {path.name}: {e}")
+                failed.append(path.name)
+                continue
             # Write only complete years, so an interrupted run resumes where it stopped.
             df.to_csv(path, index=False)
             print(f"  wrote {path.name}: {len(df):,} rows")
-            written.append(path)
-    return written
+    if failed:
+        print(f"  {len(failed)} file(s) not fetched; rerun `gridkeepup fetch eia930` later.")
+    return failed
 
 
 def load(name: str, respondent: str = "ERCO", raw_dir: Path = EIA930_DIR) -> pd.DataFrame:

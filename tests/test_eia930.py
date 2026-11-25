@@ -25,7 +25,7 @@ def test_parse_rows_empty():
 
 class FakeResponse:
     def __init__(self, payload):
-        self.payload, self.status_code = payload, 200
+        self.payload, self.status_code, self.ok = payload, 200, True
 
     def raise_for_status(self):
         pass
@@ -86,7 +86,43 @@ def test_get_json_retries_after_timeouts():
     assert session.calls == 3
 
 
-def test_get_json_gives_up_after_last_retry():
+def test_get_json_gives_up_without_leaking_the_key():
     session = FlakySession(failures=5)
-    with pytest.raises(requests.Timeout):
-        eia930._get_json(session, "u", {}, retries=3, sleep=lambda s: None)
+    params = {"api_key": "SECRET123", "start": "2024-08-01T00", "end": "2024-08-31T23"}
+    with pytest.raises(eia930.EIAError) as err:
+        eia930._get_json(session, "https://api.eia.gov/v2/x?api_key=SECRET123", params,
+                         retries=3, sleep=lambda s: None)
+    assert "SECRET123" not in str(err.value)
+    assert "2024-08-01T00" in str(err.value)
+    assert err.value.__cause__ is None and err.value.__suppress_context__
+
+
+class StatusSession:
+    def __init__(self, status):
+        self.status = status
+
+    def get(self, url, params, timeout):
+        resp = FakeResponse({})
+        resp.status_code, resp.ok = self.status, self.status < 400
+        return resp
+
+
+def test_non_retryable_http_error_is_redacted():
+    with pytest.raises(eia930.EIAError, match="HTTP 403") as err:
+        eia930._get_json(StatusSession(403), "u?api_key=SECRET123", {"api_key": "SECRET123"},
+                         sleep=lambda s: None)
+    assert "SECRET123" not in str(err.value)
+
+
+def test_download_skips_failing_year_and_continues(tmp_path, monkeypatch):
+    def fake_year(year, api_key, respondent, session):
+        if year == 2024:
+            raise eia930.EIAError("still failing")
+        return eia930.parse_rows([_row(f"{year}-01-01T00", "1")])
+
+    monkeypatch.setattr(eia930, "fetch_demand_year", fake_year)
+    monkeypatch.setattr(eia930, "fetch_fuel_mix_year", fake_year)
+    failed = eia930.download(2023, 2025, "KEY", out_dir=tmp_path)
+    assert failed == ["demand_ERCO_2024.csv", "fuel_mix_ERCO_2024.csv"]
+    assert (tmp_path / "demand_ERCO_2025.csv").exists()
+    assert not (tmp_path / "demand_ERCO_2024.csv").exists()

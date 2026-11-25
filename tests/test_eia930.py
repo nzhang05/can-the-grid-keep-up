@@ -1,4 +1,6 @@
 import pandas as pd
+import pytest
+import requests
 
 from gridkeepup.fetch import eia930
 
@@ -55,3 +57,36 @@ def test_fetch_route_paginates(monkeypatch):
     assert [c["offset"] for c in session.calls] == [0, 5, 10]
     assert session.calls[0]["facets[respondent][]"] == ["ERCO"]
     assert session.calls[0]["frequency"] == "hourly"
+
+
+def test_month_windows_cover_leap_february():
+    windows = eia930.month_windows(2024)
+    assert len(windows) == 12
+    assert windows[0] == ("2024-01-01T00", "2024-01-31T23")
+    assert windows[1] == ("2024-02-01T00", "2024-02-29T23")
+    assert windows[-1] == ("2024-12-01T00", "2024-12-31T23")
+
+
+class FlakySession:
+    """Times out `failures` times, then answers."""
+
+    def __init__(self, failures):
+        self.failures, self.calls = failures, 0
+
+    def get(self, url, params, timeout):
+        self.calls += 1
+        if self.calls <= self.failures:
+            raise requests.Timeout("read timed out")
+        return FakeResponse({"response": {"total": "0", "data": []}})
+
+
+def test_get_json_retries_after_timeouts():
+    session = FlakySession(failures=2)
+    eia930._get_json(session, "u", {}, retries=3, sleep=lambda s: None)
+    assert session.calls == 3
+
+
+def test_get_json_gives_up_after_last_retry():
+    session = FlakySession(failures=5)
+    with pytest.raises(requests.Timeout):
+        eia930._get_json(session, "u", {}, retries=3, sleep=lambda s: None)

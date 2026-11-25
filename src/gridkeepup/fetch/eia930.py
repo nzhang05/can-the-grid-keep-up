@@ -23,20 +23,44 @@ from gridkeepup.paths import EIA930_DIR
 
 API_BASE = "https://api.eia.gov/v2"
 PAGE_SIZE = 5000  # EIA API v2 maximum rows per request
+TIMEOUT_S = 120
+RETRIES = 5
+RETRY_STATUS = (429, 500, 502, 503, 504)
 
 DEMAND_ROUTE = "electricity/rto/region-data"
 FUEL_ROUTE = "electricity/rto/fuel-type-data"
 
 
-def _get_json(session: requests.Session, url: str, params: dict, retries: int = 4) -> dict:
+def _get_json(session: requests.Session, url: str, params: dict,
+              retries: int = RETRIES, sleep=time.sleep) -> dict:
+    """GET with retries on timeouts, dropped connections and 429/5xx (EIA's API is slow)."""
     for attempt in range(retries):
-        resp = session.get(url, params=params, timeout=60)
-        if resp.status_code in (429, 500, 502, 503, 504) and attempt < retries - 1:
-            time.sleep(2**attempt)
+        last = attempt == retries - 1
+        try:
+            resp = session.get(url, params=params, timeout=TIMEOUT_S)
+        except (requests.Timeout, requests.ConnectionError):
+            if last:
+                raise
+            wait = 2 ** (attempt + 1)
+            print(f"    EIA API slow or unreachable, retrying in {wait}s...")
+            sleep(wait)
+            continue
+        if resp.status_code in RETRY_STATUS and not last:
+            sleep(2 ** (attempt + 1))
             continue
         resp.raise_for_status()
         return resp.json()
     raise RuntimeError("unreachable")
+
+
+def month_windows(year: int) -> list[tuple[str, str]]:
+    """(start, end) hourly bounds per month, e.g. ('2024-02-01T00', '2024-02-29T23')."""
+    out = []
+    for month in range(1, 13):
+        start = pd.Timestamp(year=year, month=month, day=1)
+        end = start + pd.offsets.MonthEnd(0)
+        out.append((f"{start:%Y-%m-%d}T00", f"{end:%Y-%m-%d}T23"))
+    return out
 
 
 def fetch_route(
@@ -93,28 +117,27 @@ def parse_rows(rows: list[dict]) -> pd.DataFrame:
     return df[lead + [c for c in df.columns if c not in lead]]
 
 
+def _fetch_year_by_month(route: str, facets: dict[str, list[str]], year: int, api_key: str,
+                         session: requests.Session | None) -> pd.DataFrame:
+    """One request series per month: small queries finish well inside EIA's timeouts."""
+    frames = []
+    for start, end in month_windows(year):
+        frames.append(fetch_route(route, facets, start, end, api_key, session))
+        print(f"    {start[:7]} done", end="\r", flush=True)
+    frames = [f for f in frames if not f.empty]
+    return pd.concat(frames, ignore_index=True) if frames else parse_rows([])
+
+
 def fetch_demand_year(year: int, api_key: str, respondent: str = "ERCO",
                       session: requests.Session | None = None) -> pd.DataFrame:
-    return fetch_route(
-        DEMAND_ROUTE,
-        {"respondent": [respondent], "type": ["D"]},
-        f"{year}-01-01T00",
-        f"{year}-12-31T23",
-        api_key,
-        session,
-    )
+    return _fetch_year_by_month(DEMAND_ROUTE, {"respondent": [respondent], "type": ["D"]},
+                                year, api_key, session)
 
 
 def fetch_fuel_mix_year(year: int, api_key: str, respondent: str = "ERCO",
                         session: requests.Session | None = None) -> pd.DataFrame:
-    return fetch_route(
-        FUEL_ROUTE,
-        {"respondent": [respondent]},
-        f"{year}-01-01T00",
-        f"{year}-12-31T23",
-        api_key,
-        session,
-    )
+    return _fetch_year_by_month(FUEL_ROUTE, {"respondent": [respondent]},
+                                year, api_key, session)
 
 
 def download(first_year: int, last_year: int, api_key: str, respondent: str = "ERCO",
@@ -129,7 +152,9 @@ def download(first_year: int, last_year: int, api_key: str, respondent: str = "E
             if path.exists() and not overwrite:
                 print(f"  skip {path.name} (exists)")
                 continue
+            print(f"  fetching {path.name}...")
             df = fn(year, api_key, respondent, session)
+            # Write only complete years, so an interrupted run resumes where it stopped.
             df.to_csv(path, index=False)
             print(f"  wrote {path.name}: {len(df):,} rows")
             written.append(path)

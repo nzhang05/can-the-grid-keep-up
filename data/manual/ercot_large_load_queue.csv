@@ -1,0 +1,7 @@
+as_of_month,total_large_load_gw,datacenter_share_pct,source,url,verified,note
+2024-12,63,,Latitude Media citing ERCOT,https://www.latitudemedia.com/news/ercots-large-load-queue-has-nearly-quadrupled-in-a-single-year/,false,End of 2024 figure
+2025-11,226,77,Latitude Media citing ERCOT board filing,https://www.latitudemedia.com/news/ercots-large-load-queue-has-nearly-quadrupled-in-a-single-year/,false,"As of November 2025; ~77% large data centers"
+2025-12,233,70,Utility Dive citing ERCOT board meeting (Dec 9 2025),https://www.utilitydive.com/news/ercots-large-load-queue-jumped-almost-300-last-year/808820/,false,"More than 233 GW; more than 70% data centers"
+2026-03,410,87,ERCOT Board of Directors April 2026 Item 9,https://www.ercot.com/files/docs/2026/04/13/9-Interconnection-and-Grid-Analysis-Update.pdf,false,As of March 26 2026
+2026-05,438,89,ERCOT Board of Directors June 2026 Item 8,https://www.ercot.com/files/docs/2026/05/24/8-Interconnection-and-Grid-Analysis-Update.pdf,false,"~438 GW; ~89% data centers per Data Center Frontier"
+2026-06,474,90,ERCOT Senate panel July 29 2026,https://www.ercot.com/files/docs/2026/07/29/ERCOT-Senate-July-29-Panel-1-Assessing-The-Grid.pdf,false,"Large Load Interconnection Requests as of June 2026; ~90% data centers"

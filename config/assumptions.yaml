@@ -1,0 +1,34 @@
+# Every modelling assumption lives here, with its source or rationale.
+# Values marked TODO are set together in the iteration where they first matter.
+
+horizon:
+  start_year: 2026
+  end_year: 2030          # extend to 2033 (ERCOT's reporting horizon) later
+
+region:
+  name: ERCOT
+  eia_respondent: ERCO    # EIA-930 balancing-authority code for ERCOT
+  state: TX               # EIA-860M filter (ERCOT covers most, not all, of Texas)
+  eia860m_balancing_authority: ERCO
+
+history:
+  first_year: 2019        # EIA-930 hourly data used as weather years
+  last_year: 2025
+
+demand:                   # v1
+  facility_to_it_power: 1.3   # Epoch AI: facility power is typically ~1.3x IT power
+  load_factor: null           # TODO v1: share of nameplate data centers draw on average
+  connection_probability:     # TODO v1: chance a queued MW connects, by ERCOT study stage
+    low: {}
+    mid: {}
+    high: {}
+  ramp_years: null            # TODO v1: years for a campus to reach full load
+
+supply:                   # v2
+  completion_rate_source: "LBNL Queued Up"
+  completion_rates: {}        # TODO v2: by fuel and stage
+  thermal_forced_outage_rate: null   # TODO v3
+
+adequacy:                 # v3
+  non_datacenter_load_growth: null   # TODO v3: annual growth of everything else
+  reliability_standard: "1 day in 10 years"

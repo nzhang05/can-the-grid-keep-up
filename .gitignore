@@ -1,0 +1,23 @@
+# Secrets: your API keys live in .env and must never be committed
+.env
+
+# Downloaded and derived data (rebuilt by `uv run gridkeepup fetch` / `build`)
+data/raw/
+data/processed/
+data/*.duckdb
+outputs/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/

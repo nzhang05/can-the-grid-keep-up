@@ -1,0 +1,4 @@
+as_of_month,stage,gw,source,url,verified,note
+2026-04,No studies submitted,321,Data Center Frontier citing ERCOT April 2026 monthly report,https://www.datacenterfrontier.com/energy/article/55401760/ercot-puts-texas-ai-megawatts-to-the-test,false,"Applications total 445.8 GW through 2033; stages listed sum to 436.7 GW, so ~9 GW is in stages not reported in the article (check ERCOT's report)"
+2026-04,Under ERCOT review,93.7,Data Center Frontier citing ERCOT April 2026 monthly report,https://www.datacenterfrontier.com/energy/article/55401760/ercot-puts-texas-ai-megawatts-to-the-test,false,
+2026-04,Met Section 9.5 requirements,22,Data Center Frontier citing ERCOT April 2026 monthly report,https://www.datacenterfrontier.com/energy/article/55401760/ercot-puts-texas-ai-megawatts-to-the-test,false,

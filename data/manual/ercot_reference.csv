@@ -1,2 +1,8 @@
 metric,value,unit,date,source,url,verified
-record_peak_demand,85508,MW,2023-08-10,ERCOT Trending Topics: New Batch Connection Process (June 2026),https://www.ercot.com/files/docs/2026/06/18/Trending-Topics-ERCOT-s-New-Batch-Connection-Process-for-Large-Electricity-Users-v2.pdf,false
+record_peak_demand,91134,MW,2026-07-22,ERCOT Monthly Operational Overview July 2026 (unofficial record; hour ending 18),https://www.ercot.com/files/docs/2026/08/17/ERCOT-Monthly-Operational-Overview-July-2026.pdf,false
+previous_record_peak_demand,85508,MW,2023-08-10,ERCOT Monthly Operational Overview July 2026,https://www.ercot.com/files/docs/2026/08/17/ERCOT-Monthly-Operational-Overview-July-2026.pdf,false
+large_load_observed_energized,5.9,GW,2026-04,Data Center Frontier citing ERCOT April 2026 monthly report,https://www.datacenterfrontier.com/energy/article/55401760/ercot-puts-texas-ai-megawatts-to-the-test,false
+large_load_approved_not_operational,3.2,GW,2026-04,Data Center Frontier citing ERCOT April 2026 monthly report,https://www.datacenterfrontier.com/energy/article/55401760/ercot-puts-texas-ai-megawatts-to-the-test,false
+batch_zero_base_load,66.4,GW,2026-09-03,ERCOT Board Item 14 Batch Zero Update (Sep 2026),https://www.ercot.com/files/docs/2026/09/11/14-Batch-Zero-Update.pdf,false
+batch_zero_studied_load,127.9,GW,2026-09-03,ERCOT Board Item 14 Batch Zero Update (Sep 2026; chart shows 125.4),https://www.ercot.com/files/docs/2026/09/11/14-Batch-Zero-Update.pdf,false
+batch_zero_excluded,302.2,GW,2026-09-03,ERCOT Board Item 14 Batch Zero Update (Sep 2026),https://www.ercot.com/files/docs/2026/09/11/14-Batch-Zero-Update.pdf,false

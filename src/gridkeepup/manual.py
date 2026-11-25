@@ -43,5 +43,10 @@ def reference(metric: str) -> float:
     return float(row["value"].iloc[0])
 
 
+def reference_date(metric: str) -> pd.Timestamp:
+    df = load("ercot_reference")
+    return pd.Timestamp(df.loc[df["metric"] == metric, "date"].iloc[0])
+
+
 def unverified_count() -> int:
     return int(sum((~load(name)["verified"].astype(bool)).sum() for name in REQUIRED))

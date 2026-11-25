@@ -35,6 +35,10 @@ def v0_queue_vs_peak(queue: pd.DataFrame | None = None,
         else record_peak_mw
     demand = eia930.load("demand") if demand is None else demand
     peak_gw = record_peak_mw / 1000
+    try:
+        peak_label = f"{manual.reference_date('record_peak_demand'):%b %Y}"
+    except (KeyError, IndexError, ValueError):
+        peak_label = "record"
     latest = queue.iloc[-1]
     ratio = latest["total_large_load_gw"] / peak_gw
 
@@ -55,7 +59,7 @@ def v0_queue_vs_peak(queue: pd.DataFrame | None = None,
         ))
     fig.add_hline(
         y=peak_gw, line={"color": PEAK_COLOR, "dash": "dash", "width": 1.5},
-        annotation_text=f"All-time peak demand: {peak_gw:,.1f} GW (Aug 2023)",
+        annotation_text=f"All-time peak demand: {peak_gw:,.1f} GW ({peak_label})",
         annotation_position="bottom right",
     )
     fig.update_layout(

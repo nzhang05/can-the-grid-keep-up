@@ -83,3 +83,50 @@ def v0_queue_vs_peak(queue: pd.DataFrame | None = None,
     )
     fig.update_yaxes(rangemode="tozero", gridcolor="#e5e7eb", showgrid=True)
     return fig
+
+
+def v1_demand_scenarios(proj: pd.DataFrame | None = None,
+                        record_peak_mw: float | None = None) -> go.Figure:
+    """New data center load at system peak, 2026 to horizon end: mid line, low-high band."""
+    from gridkeepup import demand
+
+    proj = demand.project() if proj is None else proj
+    record_peak_mw = manual.reference("record_peak_demand") if record_peak_mw is None \
+        else record_peak_mw
+    wide = proj.pivot(index="year", columns="scenario", values="peak_gw")
+    end = wide.index.max()
+    lo, mid, hi = wide.loc[end, "low"], wide.loc[end, "mid"], wide.loc[end, "high"]
+    share = mid / (record_peak_mw / 1000)
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=list(wide.index) + list(wide.index[::-1]),
+        y=list(wide["high"]) + list(wide["low"][::-1]),
+        mode="lines", fill="toself", fillcolor="rgba(37, 99, 235, 0.15)", line={"width": 0},
+        name="Low to high scenario", hoverinfo="skip",
+    ))
+    fig.add_trace(go.Scatter(
+        x=wide.index, y=wide["mid"], mode="lines+markers", name="Mid scenario",
+        line={"color": QUEUE_COLOR, "width": 3}, marker={"size": 8},
+        customdata=wide[["low", "high"]].to_numpy(),
+        hovertemplate="%{x}: %{y:.1f} GW (range %{customdata[0]:.1f} to "
+                      "%{customdata[1]:.1f})<extra></extra>",
+    ))
+    for label, value in (("high", hi), ("low", lo)):
+        fig.add_annotation(x=end, y=value, text=f"{label}: {value:.0f} GW", showarrow=False,
+                           xanchor="left", xshift=10, font={"color": PEAK_COLOR})
+    fig.add_annotation(x=end, y=mid, text=f"mid: {mid:.0f} GW", showarrow=False,
+                       xanchor="left", xshift=10, font={"color": QUEUE_COLOR})
+    fig.update_layout(
+        title={
+            "text": f"Data centers could add {lo:.0f} to {hi:.0f} GW to ERCOT's peak by {end}"
+                    f"<br><sup>Mid case {mid:.0f} GW, about {share:.0%} of today's record "
+                    "peak. New load only; excludes crypto and load already connected</sup>",
+            "x": 0.01,
+        },
+        yaxis_title="GW added at system peak", xaxis={"dtick": 1, "title": None},
+        template="simple_white", legend={"orientation": "h", "y": -0.15},
+        margin={"t": 90, "r": 90},
+    )
+    fig.update_yaxes(rangemode="tozero", gridcolor="#e5e7eb", showgrid=True)
+    return fig

@@ -15,14 +15,48 @@ history:
   first_year: 2019        # EIA-930 hourly data used as weather years
   last_year: 2025
 
-demand:                   # v1
+demand:                   # v1: decided 2026-11-26, rationale in docs/demand-assumptions.md
   facility_to_it_power: 1.3   # Epoch AI: facility power is typically ~1.3x IT power
-  load_factor: null           # TODO v1: share of nameplate data centers draw on average
-  connection_probability:     # TODO v1: chance a queued MW connects, by ERCOT study stage
-    low: {}
-    mid: {}
-    high: {}
-  ramp_years: null            # TODO v1: years for a campus to reach full load
+
+  # Stages = ERCOT Batch Zero classification (Sep 2026) plus already-connected load.
+  # p_connect = share of the stage's MW whose project connects by the end of the horizon.
+  # in_baseline = already on the system, so already inside EIA's historical demand
+  #   (counting it again as "new" would double count).
+  stages:
+    - name: Observed energized
+      gw: 5.9
+      in_baseline: true
+      p_connect: {low: 1.0, mid: 1.0, high: 1.0}
+    - name: Approved, not yet operational
+      gw: 3.2
+      in_baseline: false
+      p_connect: {low: 0.50, mid: 0.75, high: 1.00}
+      connect_years: [2027]           # already approved: first in line once the pause ends
+    - name: Batch Zero base load
+      gw: 66.4
+      in_baseline: false
+      p_connect: {low: 0.10, mid: 0.20, high: 0.40}
+    - name: Batch Zero studied load
+      gw: 127.9
+      in_baseline: false
+      p_connect: {low: 0.01, mid: 0.03, high: 0.08}
+      connect_years: [2028, 2029, 2030]   # earlier stage: needs more study first
+    - name: Excluded
+      gw: 302.2
+      in_baseline: false
+      p_connect: {low: 0.0, mid: 0.0, high: 0.0}
+
+  # Crypto mining is excluded from new demand: it curtails in tight hours, so it adds
+  # little at peak. Queue stages are scaled by the data center share. Existing crypto is
+  # already in the historical demand baseline. Set include_crypto: true to count it.
+  include_crypto: false
+  datacenter_share: 0.90      # ERCOT: ~90% of large-load requests are data centers (Jun 2026)
+
+  first_new_connection_year: 2027   # energization pause since 3 Aug 2026; stages without
+                                    # connect_years spread evenly from here to horizon end
+  ramp_years: 3               # linear ramp to full load after connection
+  load_factor: 0.70           # average draw / nameplate (energy)
+  peak_factor: 0.90           # draw at system peak / nameplate (non-flexible data centers)
 
 supply:                   # v2
   completion_rate_source: "LBNL Queued Up"

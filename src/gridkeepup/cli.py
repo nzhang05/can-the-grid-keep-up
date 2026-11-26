@@ -6,7 +6,8 @@
   fetch all             both of the above
   build                 load every input into data/grid.duckdb
   quality               per-year data quality report for hourly demand
-  chart v0              write outputs/v0_queue_vs_peak.html
+  demand                v1 data center demand scenarios (from config/assumptions.yaml)
+  chart v0|v1           write outputs/<name>_*.html
 """
 
 from __future__ import annotations
@@ -75,13 +76,28 @@ def cmd_quality(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_demand(_: argparse.Namespace) -> int:
+    import pandas as pd
+
+    from gridkeepup import demand
+    a = demand.DemandAssumptions.from_config()
+    with pd.option_context("display.width", 120):
+        print("New data center load (excludes load already on the system):")
+        print(demand.project(a).to_string(index=False))
+        print(f"\nConnected GW by stage by {a.end_year}:")
+        print(demand.by_stage(a).to_string())
+    return 0
+
+
 def cmd_chart(args: argparse.Namespace) -> int:
     from gridkeepup import charts
     OUTPUTS_DIR.mkdir(exist_ok=True)
-    if args.name == "v0":
-        path = OUTPUTS_DIR / "v0_queue_vs_peak.html"
-        charts.v0_queue_vs_peak().write_html(path, include_plotlyjs="cdn")
-        print(f"wrote {path}")
+    figs = {"v0": ("v0_queue_vs_peak.html", charts.v0_queue_vs_peak),
+            "v1": ("v1_demand_scenarios.html", charts.v1_demand_scenarios)}
+    name, make = figs[args.name]
+    path = OUTPUTS_DIR / name
+    make().write_html(path, include_plotlyjs="cdn")
+    print(f"wrote {path}")
     return 0
 
 
@@ -96,8 +112,9 @@ def main(argv: list[str] | None = None) -> int:
     fetch.set_defaults(fn=cmd_fetch)
     sub.add_parser("build").set_defaults(fn=cmd_build)
     sub.add_parser("quality").set_defaults(fn=cmd_quality)
+    sub.add_parser("demand").set_defaults(fn=cmd_demand)
     chart = sub.add_parser("chart")
-    chart.add_argument("name", choices=["v0"])
+    chart.add_argument("name", choices=["v0", "v1"])
     chart.set_defaults(fn=cmd_chart)
     args = parser.parse_args(argv)
     try:

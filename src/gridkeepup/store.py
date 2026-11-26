@@ -7,7 +7,7 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 
-from gridkeepup import clean, manual
+from gridkeepup import clean, demand, manual
 from gridkeepup.fetch import eia860m, eia930
 from gridkeepup.paths import DB_PATH
 
@@ -33,6 +33,8 @@ def build(db_path: Path = DB_PATH) -> dict[str, int]:
             "eia930_fuel_mix": fuel_raw,
             "demand_clean": clean.clean_demand(demand_raw),
             "generation_clean": clean.clean_generation(fuel_raw),
+            "demand_scenarios": demand.project(),
+            "demand_by_stage": demand.by_stage().reset_index(),
         }
         tables.update({f"eia860m_{k}": v for k, v in eia860m.load_latest().items()})
         for name, df in tables.items():

@@ -1,8 +1,16 @@
-# Demand assumptions (v1): proposal for review
+# Demand assumptions (v1)
 
-Status: **proposed, not yet decided.** Every number below marked *proposed* is a starting
-point to be accepted, changed or replaced. Sources are listed at the end; figures taken
-from secondary sources are flagged in `data/manual/` until checked against ERCOT's slides.
+Status: **decided 2026-11-26.** The values below are in
+[`config/assumptions.yaml`](../config/assumptions.yaml); change them there and rerun
+`uv run gridkeepup demand`. Figures from secondary sources stay flagged in `data/manual/`
+until checked against ERCOT's slides.
+
+## Result (mid case, 2030)
+
+About 17.6 GW of new data centers connect by 2030, but with a 3-year ramp only 11.4 GW is
+drawing power that year: **+10 GW at system peak and +70 TWh a year** (ERCOT used 464 TWh in
+2024). Low and high: +5 and +20 GW at peak. These are on top of the 5.9 GW of large loads
+already connected, which is already in the historical demand.
 
 ## The question
 
@@ -41,7 +49,7 @@ new DC GW in year Y = sum over stages ( stage GW x P(connect by 2030 | stage) x 
 
 ## Proposed values
 
-**Probability that a stage's MW is connected and running by 2030** (*proposed*)
+**Probability that a stage's MW is connected and running by 2030** 
 
 | Stage | GW | Low | Mid | High | Reasoning |
 | --- | --- | --- | --- | --- | --- |
@@ -51,19 +59,21 @@ new DC GW in year Y = sum over stages ( stage GW x P(connect by 2030 | stage) x 
 | Batch Zero studied load | ~127.9 | 1% | 3% | 8% | Earlier stage; most will slip past 2030 or cancel |
 | Excluded | 302.2 | 0% | 0% | 0% | Not in ERCOT's planning cases |
 
-**Resulting nameplate data center load by 2030** (arithmetic on the table)
+**Connected by 2030** (stage GW x probability; the first row is already connected)
 
-| Scenario | GW |
-| --- | --- |
-| Low | ~15 |
-| Mid | ~25 |
-| High | ~46 |
+| Scenario | All stages incl. already connected | New data centers only (x 90% share) |
+| --- | --- | --- |
+| Low | ~15 GW | 8.6 GW |
+| Mid | ~25 GW | 17.6 GW |
+| High | ~46 GW | 36.0 GW |
 
-**Timing** (*proposed*): nothing new energizes before 2027 because of the pause; each
-connected project ramps linearly to full load over 3 years (consistent with only ~43% of
-approved load drawing power today).
+**Timing**: nothing new energizes before 2027 because of the pause; each connected project
+ramps linearly to full load over 3 years (consistent with only ~43% of approved load drawing
+power today). Within that, implementation choices: approved-but-not-operational load
+connects in 2027 (first in line), base load spreads evenly over 2027 to 2030, and studied
+load over 2028 to 2030 (it needs more study first).
 
-**Load factor** (*proposed*): 0.70 average (energy), 0.90 of nameplate during system
+**Load factor** : 0.70 average (energy), 0.90 of nameplate during system
 peak hours (data centers don't back off at peak unless they are flexible; v4 tests that).
 
 ## Cross-checks to run in v1
@@ -73,13 +83,16 @@ peak hours (data centers don't back off at peak unless they are flexible; v4 tes
   (analysts expect roughly 65 GW of US data center growth through 2030)
 - Epoch AI's Texas sites: the bottom-up total should sit inside the mid scenario near term
 
-## Decisions for review
+## Decisions (2026-11-26)
 
-- [ ] Use Batch Zero categories as stages (instead of the April 2026 study stages)?
-- [ ] Accept, change or replace the probabilities above
-- [ ] 3-year ramp and no new energizations before 2027?
-- [ ] Load factor 0.70 average and 0.90 at peak?
-- [ ] Count crypto mining? (ERCOT's energized large loads include it; it is highly flexible)
+- [x] Batch Zero categories as stages
+- [x] Probabilities as proposed
+- [x] 3-year ramp, no new energizations before 2027
+- [x] Load factor 0.70 average, 0.90 at peak
+- [x] Crypto mining excluded from new demand. Miners curtail in tight hours, so they add
+  little at peak; queue stages are scaled by the ~90% data center share, and existing
+  crypto is already in the historical baseline. One switch (`include_crypto`) flips it.
+- [x] Load already connected (5.9 GW) is treated as part of the baseline, not as new demand.
 
 ## Sources
 

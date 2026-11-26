@@ -41,3 +41,14 @@ def test_missing_eia_key_message(monkeypatch):
     monkeypatch.delenv("EIA_API_KEY", raising=False)
     with pytest.raises(config.MissingKeyError, match=".env"):
         config.get_eia_api_key()
+
+
+def test_v1_chart_title_uses_horizon_end_range():
+    proj = pd.DataFrame({
+        "scenario": ["low", "mid", "high"] * 2,
+        "year": [2029] * 3 + [2030] * 3,
+        "peak_gw": [1, 2, 3, 5, 10, 20],
+    })
+    fig = charts.v1_demand_scenarios(proj, record_peak_mw=100_000)
+    assert "5 to 20 GW" in fig.layout.title.text
+    assert "10%" in fig.layout.title.text

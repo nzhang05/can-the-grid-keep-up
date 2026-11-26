@@ -12,8 +12,8 @@ whether supply covers demand hour by hour, in normal and extreme weather.
 
 | Version | Scope | Status |
 | --- | --- | --- |
-| v0 | Data foundations: fetchers, manual inputs, first chart | in progress |
-| v1 | Demand: low / mid / high data center GW by year to 2030 | planned |
+| v0 | Data foundations: fetchers, cleaning, manual inputs, first chart | done |
+| v1 | Demand: low / mid / high data center GW by year to 2030 | first version |
 | v2 | Supply: what gets built, by fuel | planned |
 | v3 | Hourly adequacy: shortfall hours in every weather year | planned |
 | v4 | Flexibility analysis and dashboard launch | planned |
@@ -30,7 +30,9 @@ cp .env.example .env          # then paste your free EIA API key after EIA_API_K
 uv run gridkeepup check       # what's configured, what's on disk
 uv run gridkeepup fetch all   # EIA-930 hourly data + EIA-860M generator inventory
 uv run gridkeepup build       # load everything into data/grid.duckdb
-uv run gridkeepup chart v0    # writes outputs/v0_queue_vs_peak.html
+uv run gridkeepup quality     # data quality report
+uv run gridkeepup demand      # v1 demand scenarios
+uv run gridkeepup chart v1    # writes outputs/v1_demand_scenarios.html
 uv run streamlit run app/streamlit_app.py
 ```
 

@@ -46,7 +46,7 @@ Your `.env` file is git-ignored, so the key never leaves your machine.
 | [EIA-930 Hourly Electric Grid Monitor](https://www.eia.gov/electricity/gridmonitor/) | ERCOT hourly demand and generation by fuel, 2019 onwards |
 | [EIA-860M](https://www.eia.gov/electricity/data/eia860m/) | Operating, planned and retiring generators in ERCOT |
 | ERCOT large-load reports | The large-load queue by study stage (hand-entered, see [`data/manual`](data/manual)) |
-| [Epoch AI data centers](https://epoch.ai/data/data-centers) | Site-level data center power (v1) |
+| [Epoch AI data centers](https://epoch.ai/data/ai-data-centers) | Site-level AI data center power, used as a v1 cross-check (CC BY; download by hand into `data/raw/epoch/`) |
 | [LBNL Queued Up](https://emp.lbl.gov/queues) | How many queued projects actually get built (v2) |
 
 Every modelling assumption lives in [`config/assumptions.yaml`](config/assumptions.yaml) with its source.
@@ -55,6 +55,11 @@ Every modelling assumption lives in [`config/assumptions.yaml`](config/assumptio
 
 This is a system-level adequacy model. It does not model transmission or local grid
 constraints (network models are not public), prices, or water use.
+
+**Crypto mining is out of scope.** It is a large share of the large loads already connected
+in Texas, but miners switch off in tight hours, so they add little at peak. Existing crypto
+load is part of the historical demand baseline; new demand counts data centers only (about
+90% of ERCOT's large-load queue). Flip `include_crypto` in the config to count it.
 
 ## Layout
 

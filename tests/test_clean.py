@@ -61,3 +61,16 @@ def test_quality_report_groups_by_texas_year():
     assert report.index.tolist() == [2023, 2024]
     assert report["hours"].tolist() == [10, 2]
     assert not report["complete"].any()
+
+
+def test_late_starting_fuel_is_zero_before_first_report_not_a_gap():
+    """Battery storage only appears in EIA-930 from 2024: earlier hours are 0, not gaps."""
+    hours = pd.date_range("2023-12-31 22:00", periods=4, freq="h", tz="UTC")
+    raw = pd.DataFrame({
+        "timestamp_utc": list(hours) + list(hours[2:]),
+        "fueltype": ["NG"] * 4 + ["BAT", "BAT"],
+        "value_mwh": [30000, 31000, 32000, 33000, -500, 800],
+    })
+    out = clean.clean_generation(raw)
+    assert out["BAT"].tolist() == [0.0, 0.0, -500.0, 800.0]   # charging stays negative
+    assert not out["was_filled"].any()

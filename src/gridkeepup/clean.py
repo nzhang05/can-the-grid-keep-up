@@ -13,6 +13,7 @@ from __future__ import annotations
 import pandas as pd
 
 MAX_FILL_HOURS = 6        # longer gaps stay missing and are reported
+STORAGE_FUELS = {"BAT", "UES"}   # EIA-930 storage categories: net output, negative when charging
 SPIKE_RATIO = 1.5         # an hour > 1.5x both neighbours (or < 1/1.5) is a spike
 
 # Periods where reported load is not underlying demand. Times are UTC.
@@ -87,8 +88,17 @@ def clean_generation(raw: pd.DataFrame) -> pd.DataFrame:
                .sort_index())
     full = pd.date_range(wide.index.min(), wide.index.max(), freq="h", tz="UTC")
     wide = wide.reindex(full).rename_axis("timestamp_utc")
-    gaps = wide.isna().any(axis=1)
-    wide = wide.apply(lambda col: _fill(col)[0]).clip(lower=0)
+    # Categories EIA added later (battery storage from 2024) are empty before their first
+    # report: that is "not reported", not a gap, so it neither counts as one nor gets filled.
+    before_first = wide.apply(lambda col: col.index < col.first_valid_index())
+    gaps = (wide.isna() & ~before_first).any(axis=1)
+    # Storage is net generation and is negative while charging, so only non-storage
+    # categories are clipped at zero.
+    storage = [c for c in wide.columns if c in STORAGE_FUELS]
+    wide = wide.apply(lambda col: _fill(col)[0])
+    other = wide.columns.difference(storage)
+    wide[other] = wide[other].clip(lower=0)
+    wide = wide.mask(before_first, 0.0)
     wide.columns.name = None
     wide["was_filled"] = gaps & wide.notna().all(axis=1)
     return wide.reset_index()

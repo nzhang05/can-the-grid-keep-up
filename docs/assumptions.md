@@ -37,6 +37,8 @@ Last reviewed: 2026-11-26 (v1 decided; v2 proposed).
 | B5 | Generator inventory | EIA-860M, filtered to `eia860m_balancing_authority: ERCO` (`state: TX` kept for reference) | The BA filter excludes Texas plants in SPP/MISO/WECC | config `region`, `fetch/eia860m.py` | Decided |
 | B6 | EIA-860M header row | Found by the `Entity ID` column header | EIA puts notes above the table and changes layout over time | `fetch/eia860m.py` | Convention |
 | B7 | Hand-entered figures | Typed from ERCOT slides and press coverage, each with a source URL and `verified` flag | Only exist in PDFs; flags show what is not yet checked against the original slide | `data/manual/` | Convention |
+| B9 | ERCOT interconnection queue | ERCOT GIS report, October 2026 (`Project Details - Large Gen`), downloaded by hand to `data/raw/ercot_gis/` | Project-level stages and projected online dates for 446 GW | data | Convention |
+| B10 | Completion history | LBNL Queued Up data file through 2025 (`03. Complete Queue Data`, ERCOT rows, capacity-weighted), downloaded by hand to `data/raw/lbnl/` (CC BY 4.0) | Only public project-level record of which requests reached operation | data | Convention |
 | B8 | All-time peak | 91,134 MW, 22 Jul 2026 (unofficial) | ERCOT Monthly Operational Overview, Jul 2026 | `data/manual/ercot_reference.csv` | Convention (unverified) |
 
 ## C. Cleaning
@@ -95,16 +97,22 @@ Rationale and evidence: [supply-assumptions.md](supply-assumptions.md).
 | --- | --- | --- | --- | --- | --- |
 | F1 | Snapshot | `snapshot_year` 2026: EIA-860M October 2026 operating fleet is "today" (176.5 GW) | Latest inventory available | config `supply` | Convention |
 | F2 | Capacity measure | Net summer MW | ERCOT peaks in summer; summer capacity is what plants can deliver in heat | `supply.py` | Implementation |
-| F3 | Completion probability by EIA status | `status_probability`: TS 98/99/100%, V 90/95/100%, U 80/90/95%, T 50/65/80%, L 30/45/60%, P 15/25/40%, OT 25/40/60% (low/mid/high) | EIA: ~78% of next-year plans come online on schedule, cancellations rare; LBNL: 13% of queue requests reach operation nationally, 22% in ERCOT, so early stages are far less certain | config `supply` | Proposed |
-| F4 | Delays | `status_delay_years` added to the planned year: 0 for TS; low case +1 year for V/U/T and +2 for L/P; mid +1 for T/L/P | ~20% of planned solar reports a delay, mostly short; early-stage projects slip more | config `supply` | Proposed |
+| F3 | Completion probability by EIA status | `status_probability`: TS 98/99/100%, V 90/95/100%, U 80/90/95%, T 45/56/70%, L 30/40/55%, P 15/24/35%, OT 25/40/60% (low/mid/high) | ERCOT history (LBNL, computed): 56% of capacity reaches operation after signing an agreement, 24% of all requests; EIA: ~78% of next-year plans come online on schedule | config `supply` | Proposed |
+| F4 | Delays | `status_delay_years` added to the planned year: 0 for TS; low case +1 year for V/U/T and +2 for L/P; mid +1 for T/L/P | ~20% of planned solar reports a delay, mostly short; completed ERCOT projects came online close to their last reported date; early-stage projects slip more | config `supply` | Proposed |
 | F5 | Planned battery duration | `planned_storage_hours` 1.7 h | EIA-860M has no MWh for planned batteries; today's ERCOT fleet averages 1.71 h | config `supply` | Proposed |
 | F6 | Planned retirements | Units retire in their reported `planned_retirement_year` (~1.4 GW by 2030); no unannounced retirements | Only announced dates are public | `supply.py` | Implementation |
 | F7 | Expected values | A 500 MW unit at 25% adds 125 MW; no project-by-project draws | Simple and transparent; v3 can add uncertainty if needed | `supply.py` | Implementation |
 | F8 | Fuel groups | EIA technologies mapped to Nuclear, Coal (incl. petroleum coke), Gas, Wind, Solar, Storage, Hydro, Other | For charts and the adequacy model | `supply.py` (`FUEL_GROUPS`) | Convention |
-| F9 | Reporting horizon | Only projects already in EIA-860M count. Fast-to-build solar and storage for 2029-2030 are mostly not reported yet, so later years are understated | Fix: add ERCOT's interconnection queue | this file | Open (needs ERCOT queue) |
+| F9 | Reporting horizon | Only projects already in EIA-860M count. Fast-to-build solar and storage for 2029-2030 are mostly not reported yet, so later years are understated | Fix proposed in F13 | this file | Open (pending F13) |
 | F10 | No fuel-specific odds | Same status odds for every fuel | Wind faces federal permitting headwinds and gas faces turbine supply limits, but no clean source yet for fuel-specific rates | this file | Open |
 | F11 | Behind-the-meter generation | Not in supply (on-site gas at data centers, e.g. Fermi America's planned 780 MW) | Decided in v3 as a peak-demand reducer (A5) | this file | Open (v3) |
 | F12 | Fermi America nuclear | 4.5 GW planned for 2031-2032 (status P) | After the 2030 horizon; no effect on v2 | data | Convention |
+| F13 | Source split by year | EIA-860M for the fleet, retirements and projects planned up to 2027; ERCOT GIS report for projects with projected online dates from 2028, replacing EIA's 2028+ entries | The two lists name projects differently (name + county matching links ~10%), so they cannot be merged; a year split avoids double counting | supply-assumptions.md | Proposed (not implemented) |
+| F14 | ERCOT GIS stage odds | Construction started 80/90/95%; agreement signed by fuel: wind 69/74/80%, gas 54/56/57%, solar 50/67/83%, batteries 42/66/90%; study only 10/20/30%. Rule for signed agreements: low = share operating, mid = + half still in progress, high = + all still in progress | ERCOT projects with agreements signed 2000-2022 (LBNL); study-only projects must still sign and build (1.8 to 3.3 years) to make 2030 | supply-assumptions.md | Proposed (not implemented) |
+| F15 | ERCOT GIS delays | Construction and signed: +1 / 0 / 0 years; study only: +2 / +1 / 0 (low / mid / high) | As F4 | supply-assumptions.md | Proposed (not implemented) |
+| F16 | Nameplate to summer MW | ERCOT GIS MW x today's fleet ratio by fuel (gas 0.89, solar 1.00, wind 1.00, batteries 0.99) | GIS reports nameplate; the model uses summer capacity | supply-assumptions.md | Proposed (not implemented) |
+| F17 | Double counting at the 2027/2028 boundary | A project listed by EIA for 2027 and by ERCOT for 2028 may count twice | Measure when F13 is implemented | this file | Open |
+| F18 | ERCOT fuel codes | GIS "OTH" with technology "BA" = batteries | 828 of 832 OTH projects are BA | data | Convention |
 
 ## G. Not yet decided
 

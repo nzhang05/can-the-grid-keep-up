@@ -49,7 +49,8 @@ Your `.env` file is git-ignored, so the key never leaves your machine.
 | [EIA-860M](https://www.eia.gov/electricity/data/eia860m/) | Operating, planned and retiring generators in ERCOT |
 | ERCOT large-load reports | The large-load queue by study stage (hand-entered, see [`data/manual`](data/manual)) |
 | [Epoch AI data centers](https://epoch.ai/data/ai-data-centers) | Site-level AI data center power, used as a v1 cross-check (CC BY; download by hand into `data/raw/epoch/`) |
-| [LBNL Queued Up](https://emp.lbl.gov/queues) | How many queued projects actually get built (v2) |
+| [ERCOT GIS report](https://www.ercot.com/gridinfo/resource) | ERCOT's interconnection queue: project stages and projected online dates (v2; download by hand into `data/raw/ercot_gis/`) |
+| [LBNL Queued Up](https://emp.lbl.gov/queues) | ERCOT completion rates computed from project-level history (v2; CC BY 4.0; download by hand into `data/raw/lbnl/`) |
 
 Every assumption, including the ones in code, is listed with its value, rationale and status
 in the [assumptions register](docs/assumptions.md); configurable values live in

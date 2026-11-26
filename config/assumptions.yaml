@@ -77,16 +77,18 @@ crosscheck:               # v1 bottom-up check against Epoch AI's frontier AI da
 
 supply:                   # v2: PROPOSED, pending review (rationale in docs/supply-assumptions.md)
   snapshot_year: 2026         # EIA-860M October 2026: the operating fleet is "today"
-  completion_rate_source: "EIA planned-vs-actual history; LBNL Queued Up 2026"
+  completion_rate_source: "LBNL Queued Up 2026 (ERCOT projects, computed); EIA planned-vs-actual history"
 
   # Chance a planned unit reaches operation, by its EIA-860M status code.
   status_probability:
     TS: {low: 0.98, mid: 0.99, high: 1.00}   # construction complete, not yet in commercial operation
     V:  {low: 0.90, mid: 0.95, high: 1.00}   # under construction, more than 50% complete
     U:  {low: 0.80, mid: 0.90, high: 0.95}   # under construction, 50% complete or less
-    T:  {low: 0.50, mid: 0.65, high: 0.80}   # regulatory approvals received, not under construction
-    L:  {low: 0.30, mid: 0.45, high: 0.60}   # regulatory approvals pending, not under construction
-    P:  {low: 0.15, mid: 0.25, high: 0.40}   # planned, regulatory approvals not initiated
+    T:  {low: 0.45, mid: 0.56, high: 0.70}   # regulatory approvals received, not under construction
+                                             # (ERCOT post-agreement completion: 56%, LBNL)
+    L:  {low: 0.30, mid: 0.40, high: 0.55}   # regulatory approvals pending, not under construction
+    P:  {low: 0.15, mid: 0.24, high: 0.35}   # planned, regulatory approvals not initiated
+                                             # (ERCOT requests reaching operation: 24%, LBNL)
     OT: {low: 0.25, mid: 0.40, high: 0.60}   # other
 
   # Years added to the developer's planned online year.

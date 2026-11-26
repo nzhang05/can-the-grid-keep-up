@@ -36,6 +36,7 @@ class Stage:
     p_connect: dict[str, float]
     in_baseline: bool = False
     connect_years: tuple[int, ...] = field(default_factory=tuple)
+    ramp_years: float | None = None   # overrides the global ramp for this stage
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,7 @@ class DemandAssumptions:
                 in_baseline=bool(s.get("in_baseline", False)),
                 connect_years=tuple(s.get("connect_years")
                                     or range(first, h["end_year"] + 1)),
+                ramp_years=float(s["ramp_years"]) if s.get("ramp_years") else None,
             )
             for s in d["stages"]
         )
@@ -87,7 +89,7 @@ def _hours(year: int) -> int:
 
 
 def cohorts(a: DemandAssumptions, scenario: str) -> pd.DataFrame:
-    """One row per (stage, connection year) with the GW of data centers connecting then."""
+    """One row per (stage, connection year): GW of data centers connecting then, and ramp."""
     share = 1.0 if a.include_crypto else a.datacenter_share
     rows = []
     for s in a.stages:
@@ -96,8 +98,9 @@ def cohorts(a: DemandAssumptions, scenario: str) -> pd.DataFrame:
         connected = s.gw * s.p_connect[scenario] * share
         years = [y for y in s.connect_years if a.start_year <= y <= a.end_year]
         for y in years:
-            rows.append({"stage": s.name, "connect_year": y, "gw": connected / len(years)})
-    return pd.DataFrame(rows, columns=["stage", "connect_year", "gw"])
+            rows.append({"stage": s.name, "connect_year": y, "gw": connected / len(years),
+                         "ramp_years": s.ramp_years or a.ramp_years})
+    return pd.DataFrame(rows, columns=["stage", "connect_year", "gw", "ramp_years"])
 
 
 def project(a: DemandAssumptions | None = None) -> pd.DataFrame:
@@ -108,7 +111,9 @@ def project(a: DemandAssumptions | None = None) -> pd.DataFrame:
         c = cohorts(a, scenario)
         for year in a.years:
             k = year - c["connect_year"]
-            ramp = k.apply(lambda n: ramp_fraction(int(n), a.ramp_years))
+            pairs = zip(k, c["ramp_years"], strict=True)
+            ramp = pd.Series([ramp_fraction(int(n), r) for n, r in pairs],
+                             index=c.index, dtype=float)
             connected = float(c.loc[k >= 0, "gw"].sum())
             ramped = float((c["gw"] * ramp).sum())
             rows.append({

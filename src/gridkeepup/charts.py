@@ -121,7 +121,7 @@ def v1_demand_scenarios(proj: pd.DataFrame | None = None,
         title={
             "text": f"Data centers could add {lo:.0f} to {hi:.0f} GW to ERCOT's peak by {end}"
                     f"<br><sup>Mid case {mid:.0f} GW, about {share:.0%} of today's record "
-                    "peak. New load only; excludes crypto and load already connected</sup>",
+                    "peak. New load only; excludes crypto and load already drawing power</sup>",
             "x": 0.01,
         },
         yaxis_title="GW added at system peak", xaxis={"dtick": 1, "title": None},

@@ -7,6 +7,7 @@
   build                 load every input into data/grid.duckdb
   quality               per-year data quality report for hourly demand
   demand                v1 data center demand scenarios (from config/assumptions.yaml)
+  crosscheck            compare the demand model with Epoch AI's Texas data centers
   chart v0|v1           write outputs/<name>_*.html
 """
 
@@ -89,6 +90,21 @@ def cmd_demand(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_crosscheck(_: argparse.Namespace) -> int:
+    import pandas as pd
+
+    from gridkeepup import epoch
+    out = epoch.compare()
+    if out.empty:
+        print("Epoch data not found. Download it into data/raw/epoch/data_centers/.")
+        return 1
+    with pd.option_context("display.width", 160):
+        print("New facility power since the energization pause (Epoch) vs new data center")
+        print("load drawing power (model ramped_gw). Epoch is a subset, so model >= Epoch:")
+        print(out.to_string(index=False))
+    return 0
+
+
 def cmd_chart(args: argparse.Namespace) -> int:
     from gridkeepup import charts
     OUTPUTS_DIR.mkdir(exist_ok=True)
@@ -113,6 +129,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("build").set_defaults(fn=cmd_build)
     sub.add_parser("quality").set_defaults(fn=cmd_quality)
     sub.add_parser("demand").set_defaults(fn=cmd_demand)
+    sub.add_parser("crosscheck").set_defaults(fn=cmd_crosscheck)
     chart = sub.add_parser("chart")
     chart.add_argument("name", choices=["v0", "v1"])
     chart.set_defaults(fn=cmd_chart)

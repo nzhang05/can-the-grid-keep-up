@@ -23,10 +23,19 @@ demand:                   # v1: decided 2026-11-26, rationale in docs/demand-ass
   # in_baseline = already on the system, so already inside EIA's historical demand
   #   (counting it again as "new" would double count).
   stages:
-    - name: Observed energized
-      gw: 5.9
+    # ERCOT: 5.9 GW of large loads energized (Apr 2026) but only ~3.9 GW observed drawing
+    # at peak (Mar 2026). The drawing part is in the historical baseline; the rest is
+    # already connected and still ramping, which the energization pause does not stop.
+    - name: Energized, drawing (in baseline)
+      gw: 3.9
       in_baseline: true
       p_connect: {low: 1.0, mid: 1.0, high: 1.0}
+    - name: Energized, still ramping
+      gw: 2.0                         # 5.9 energized - 3.9 drawing
+      in_baseline: false
+      p_connect: {low: 0.80, mid: 0.90, high: 1.00}
+      connect_years: [2026]           # already connected; ramps from now
+      ramp_years: 2                   # remaining ramp is shorter than a new campus's
     - name: Approved, not yet operational
       gw: 3.2
       in_baseline: false
@@ -57,6 +66,14 @@ demand:                   # v1: decided 2026-11-26, rationale in docs/demand-ass
   ramp_years: 3               # linear ramp to full load after connection
   load_factor: 0.70           # average draw / nameplate (energy)
   peak_factor: 0.90           # draw at system peak / nameplate (non-flexible data centers)
+
+crosscheck:               # v1 bottom-up check against Epoch AI's frontier AI data centers
+  epoch_since: "2026-08-01"   # count Epoch buildout from the start of the energization pause
+  # Texas sites Epoch lists that may be outside ERCOT (Panhandle / South Plains utilities
+  # can be in SPP). Excluded from the "likely ERCOT" total until their utility is checked.
+  epoch_possibly_not_ercot:
+    - Goodnight               # Claude, TX (Armstrong County, Panhandle)
+    - Coreweave Helios        # Afton, TX (Dickens County)
 
 supply:                   # v2
   completion_rate_source: "LBNL Queued Up"

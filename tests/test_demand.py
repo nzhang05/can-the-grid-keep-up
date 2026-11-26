@@ -64,3 +64,14 @@ def test_by_stage_sums_to_connected_total():
     proj = demand.project(a).query(f"year == {a.end_year}").set_index("scenario")
     for s in demand.SCENARIOS:
         assert totals[s] == pytest.approx(proj.loc[s, "connected_gw"], abs=0.02)
+
+
+def test_stage_ramp_override():
+    stage = {"name": "Ramping", "gw": 2.0, "in_baseline": False, "ramp_years": 2,
+             "p_connect": {"low": 1.0, "mid": 1.0, "high": 1.0}, "connect_years": [2026]}
+    cfg = _cfg(stages=[stage], datacenter_share=1.0, include_crypto=False, ramp_years=3)
+    out = demand.project(demand.DemandAssumptions.from_config(cfg))
+    mid = out.query("scenario == 'mid'").set_index("year")["ramped_gw"]
+    assert mid[2026] == pytest.approx(2.0 * 0.25)   # (0 + 0.5) / 2, not / 3
+    assert mid[2027] == pytest.approx(2.0 * 0.75)
+    assert mid[2028] == 2.0

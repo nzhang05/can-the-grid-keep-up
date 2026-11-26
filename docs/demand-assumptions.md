@@ -5,12 +5,26 @@ Status: **decided 2026-11-26.** The values below are in
 `uv run gridkeepup demand`. Figures from secondary sources stay flagged in `data/manual/`
 until checked against ERCOT's slides.
 
+Every assumption, including the ones in code, is in the full
+[assumptions register](assumptions.md).
+
 ## Result (mid case, 2030)
 
-About 17.6 GW of new data centers connect by 2030, but with a 3-year ramp only 11.4 GW is
-drawing power that year: **+10 GW at system peak and +70 TWh a year** (ERCOT used 464 TWh in
-2024). Low and high: +5 and +20 GW at peak. These are on top of the 5.9 GW of large loads
-already connected, which is already in the historical demand.
+About 19.2 GW of new data center capacity connects or finishes ramping by 2030, but with
+ramp-up only 13.0 GW is drawing power that year: **+11.7 GW at system peak and +80 TWh a
+year** (ERCOT used 464 TWh in 2024). Low and high: +6.5 and +21.8 GW at peak. This is on
+top of the ~3.9 GW large loads already drew in March 2026.
+
+## Changes after the cross-check (2026-11-26)
+
+Epoch AI's frontier campuses in Texas alone added more power in 2027 than the first version
+of the model. Two causes: (1) load already energized but still ramping inside its existing
+connection was missed, because all 5.9 GW of energized load was treated as baseline although
+only ~3.9 GW was drawing; (2) hybrid campuses with on-site gas make Epoch's facility power
+overstate grid demand. Fix: split the energized load into *drawing* (baseline, 3.9 GW) and
+*still ramping* (2.0 GW, 2026 to 2027, not affected by the pause). Behind-the-meter
+generation is a stated caveat until v2/v3. With the fix, the high scenario covers Epoch's
+likely-ERCOT sites from 2027 (`uv run gridkeepup crosscheck`).
 
 ## The question
 
@@ -53,7 +67,8 @@ new DC GW in year Y = sum over stages ( stage GW x P(connect by 2030 | stage) x 
 
 | Stage | GW | Low | Mid | High | Reasoning |
 | --- | --- | --- | --- | --- | --- |
-| Observed energized | 5.9 | 100% | 100% | 100% | Already on the system |
+| Energized, drawing (in baseline) | 3.9 | 100% | 100% | 100% | Already drawing power, so already in historical demand |
+| Energized, still ramping | 2.0 | 80% | 90% | 100% | Connected but not yet at full draw; ramps over 2 years from 2026 |
 | Approved, not yet operational | 3.2 | 50% | 75% | 100% | Approved; ERCOT's 55% officer-letter history sets the low end |
 | Batch Zero base load | 66.4 | 10% | 20% | 40% | Studied and prioritised, but 2030 is close and the pause delays everything |
 | Batch Zero studied load | ~127.9 | 1% | 3% | 8% | Earlier stage; most will slip past 2030 or cancel |
@@ -61,11 +76,11 @@ new DC GW in year Y = sum over stages ( stage GW x P(connect by 2030 | stage) x 
 
 **Connected by 2030** (stage GW x probability; the first row is already connected)
 
-| Scenario | All stages incl. already connected | New data centers only (x 90% share) |
-| --- | --- | --- |
-| Low | ~15 GW | 8.6 GW |
-| Mid | ~25 GW | 17.6 GW |
-| High | ~46 GW | 36.0 GW |
+| Scenario | New data center capacity (x 90% share), incl. still-ramping load |
+| --- | --- |
+| Low | 10.0 GW |
+| Mid | 19.2 GW |
+| High | 37.8 GW |
 
 **Timing**: nothing new energizes before 2027 because of the pause; each connected project
 ramps linearly to full load over 3 years (consistent with only ~43% of approved load drawing
@@ -92,7 +107,9 @@ peak hours (data centers don't back off at peak unless they are flexible; v4 tes
 - [x] Crypto mining excluded from new demand. Miners curtail in tight hours, so they add
   little at peak; queue stages are scaled by the ~90% data center share, and existing
   crypto is already in the historical baseline. One switch (`include_crypto`) flips it.
-- [x] Load already connected (5.9 GW) is treated as part of the baseline, not as new demand.
+- [x] Load already drawing power (3.9 GW) is baseline; energized load still ramping (2.0 GW)
+  is new demand (revised after the Epoch cross-check).
+- [x] Behind-the-meter generation stated as a caveat in v1; modelled in v2/v3.
 
 ## Sources
 

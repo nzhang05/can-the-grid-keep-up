@@ -8,7 +8,8 @@
   quality               per-year data quality report for hourly demand
   demand                v1 data center demand scenarios (from config/assumptions.yaml)
   crosscheck            compare the demand model with Epoch AI's Texas data centers
-  chart v0|v1           write outputs/<name>_*.html
+  supply                v2 installed capacity by fuel and year (from EIA-860M)
+  chart v0|v1|v2        write outputs/<name>_*.html
 """
 
 from __future__ import annotations
@@ -105,11 +106,31 @@ def cmd_crosscheck(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_supply(_: argparse.Namespace) -> int:
+    import pandas as pd
+
+    from gridkeepup import supply
+    p = supply.project()
+    if p.empty:
+        print("No EIA-860M workbook found. Run `gridkeepup fetch eia860m`.")
+        return 1
+    with pd.option_context("display.width", 160):
+        print("Total installed capacity, GW (net summer, expected values):")
+        print(supply.totals(p).to_string())
+        print("\nMid scenario by fuel, GW:")
+        mid = p[p["scenario"] == "mid"].pivot(index="year", columns="fuel", values="capacity_gw")
+        print(mid[supply.FUEL_ORDER].round(1).to_string())
+        print("\nPlanned GW by EIA status, and what each scenario counts by the horizon end:")
+        print(supply.additions_by_status().to_string())
+    return 0
+
+
 def cmd_chart(args: argparse.Namespace) -> int:
     from gridkeepup import charts
     OUTPUTS_DIR.mkdir(exist_ok=True)
     figs = {"v0": ("v0_queue_vs_peak.html", charts.v0_queue_vs_peak),
-            "v1": ("v1_demand_scenarios.html", charts.v1_demand_scenarios)}
+            "v1": ("v1_demand_scenarios.html", charts.v1_demand_scenarios),
+            "v2": ("v2_supply_by_fuel.html", charts.v2_supply_by_fuel)}
     name, make = figs[args.name]
     path = OUTPUTS_DIR / name
     make().write_html(path, include_plotlyjs="cdn")
@@ -130,8 +151,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("quality").set_defaults(fn=cmd_quality)
     sub.add_parser("demand").set_defaults(fn=cmd_demand)
     sub.add_parser("crosscheck").set_defaults(fn=cmd_crosscheck)
+    sub.add_parser("supply").set_defaults(fn=cmd_supply)
     chart = sub.add_parser("chart")
-    chart.add_argument("name", choices=["v0", "v1"])
+    chart.add_argument("name", choices=["v0", "v1", "v2"])
     chart.set_defaults(fn=cmd_chart)
     args = parser.parse_args(argv)
     try:

@@ -130,3 +130,50 @@ def v1_demand_scenarios(proj: pd.DataFrame | None = None,
     )
     fig.update_yaxes(rangemode="tozero", gridcolor="#e5e7eb", showgrid=True)
     return fig
+
+
+FUEL_COLORS = {
+    "Nuclear": "#7c3aed", "Coal": "#57534e", "Gas": "#f97316", "Wind": "#0ea5e9",
+    "Solar": "#eab308", "Storage": "#10b981", "Hydro": "#1d4ed8", "Other": "#a8a29e",
+}
+
+
+def v2_supply_by_fuel(proj: pd.DataFrame | None = None) -> go.Figure:
+    """Mid-scenario installed capacity by fuel (stacked), with low/high totals as markers."""
+    from gridkeepup import supply
+
+    proj = supply.project() if proj is None else proj
+    mid = proj[proj["scenario"] == "mid"].pivot(index="year", columns="fuel",
+                                                values="capacity_gw")
+    tot = supply.totals(proj)
+    last = tot.index.max()
+    today = pd.Series(proj.attrs.get("today_by_fuel_gw") or mid.loc[tot.index.min()].to_dict())
+    today_total = today.sum()
+    by_fuel_growth = (mid.loc[last] - today.reindex(mid.columns, fill_value=0.0)) \
+        .sort_values(ascending=False)
+    top = ", ".join(f"{f.lower()} +{v:.0f}" for f, v in by_fuel_growth.head(3).items() if v >= 1)
+
+    fig = go.Figure()
+    for fuel in [f for f in supply.FUEL_ORDER if f in mid.columns]:
+        fig.add_trace(go.Bar(x=mid.index, y=mid[fuel], name=fuel,
+                             marker_color=FUEL_COLORS.get(fuel),
+                             hovertemplate=f"{fuel} %{{x}}: %{{y:.1f}} GW<extra></extra>"))
+    fig.add_trace(go.Scatter(
+        x=tot.index, y=tot["high"], mode="markers", name="High scenario total",
+        marker={"symbol": "triangle-up", "size": 10, "color": PEAK_COLOR},
+        hovertemplate="High total %{x}: %{y:.0f} GW<extra></extra>"))
+    fig.add_trace(go.Scatter(
+        x=tot.index, y=tot["low"], mode="markers", name="Low scenario total",
+        marker={"symbol": "triangle-down", "size": 10, "color": PEAK_COLOR},
+        hovertemplate="Low total %{x}: %{y:.0f} GW<extra></extra>"))
+    fig.update_layout(
+        barmode="stack",
+        title={"text": f"ERCOT capacity could grow from {today_total:.0f} GW today to "
+                       f"{tot.loc[last, 'mid']:.0f} GW by {last} (mid case)"
+                       f"<br><sup>Net summer GW, expected values from EIA-860M planned projects. "
+                       f"Biggest gains since today: {top} GW</sup>", "x": 0.01},
+        yaxis_title="Installed capacity (GW, net summer)", xaxis={"dtick": 1, "title": None},
+        template="simple_white", legend={"orientation": "h", "y": -0.15}, margin={"t": 90},
+    )
+    fig.update_yaxes(gridcolor="#e5e7eb", showgrid=True)
+    return fig

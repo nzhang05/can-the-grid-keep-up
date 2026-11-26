@@ -52,3 +52,16 @@ def test_v1_chart_title_uses_horizon_end_range():
     fig = charts.v1_demand_scenarios(proj, record_peak_mw=100_000)
     assert "5 to 20 GW" in fig.layout.title.text
     assert "10%" in fig.layout.title.text
+
+
+def test_v2_chart_title_measures_growth_from_today():
+    proj = pd.DataFrame({
+        "scenario": ["low", "mid", "high"] * 2,
+        "year": [2026] * 3 + [2030] * 3,
+        "fuel": ["Solar"] * 6,
+        "capacity_gw": [12, 12, 12, 15, 20, 25],
+    })
+    proj.attrs["today_by_fuel_gw"] = {"Solar": 10.0}
+    fig = charts.v2_supply_by_fuel(proj)
+    assert "from 10 GW today to 20 GW by 2030" in fig.layout.title.text
+    assert "solar +10" in fig.layout.title.text

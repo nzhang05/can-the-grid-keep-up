@@ -2,7 +2,7 @@
 
 import streamlit as st
 
-from gridkeepup import charts, demand, manual
+from gridkeepup import charts, demand, manual, supply
 
 st.set_page_config(page_title="Can the grid keep up?", layout="wide")
 
@@ -10,7 +10,7 @@ st.title("Can the grid keep up?")
 st.markdown(
     "How much power will Texas's planned data centers need, where will it come from, "
     "and can the ERCOT grid serve them in every hour? An open, reproducible model. "
-    "**v1: demand.** Supply and hourly adequacy arrive in v2 and v3."
+    "**v2: supply (proposed).** Hourly adequacy arrives in v3."
 )
 
 st.header("1. The queue")
@@ -43,3 +43,14 @@ with st.expander("Sources for the numbers above"):
     n = manual.unverified_count()
     if n:
         st.warning(f"{n} hand-entered figures are not yet checked against the original slide.")
+
+st.header("3. Where the power would come from")
+st.plotly_chart(charts.v2_supply_by_fuel(), width="stretch")
+st.caption(
+    "Today's ERCOT fleet (EIA-860M, Oct 2026) plus planned projects weighted by their chance "
+    "of being built at their current stage, minus announced retirements. 2029-2030 is "
+    "understated: most projects for those years are not reported to EIA yet. Assumptions: "
+    "docs/supply-assumptions.md."
+)
+with st.expander("Capacity by scenario"):
+    st.dataframe(supply.totals(supply.project()), width="stretch")

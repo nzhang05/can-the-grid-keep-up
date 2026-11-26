@@ -14,7 +14,7 @@ whether supply covers demand hour by hour, in normal and extreme weather.
 | --- | --- | --- |
 | v0 | Data foundations: fetchers, cleaning, manual inputs, first chart | done |
 | v1 | Demand: low / mid / high data center GW by year to 2030, cross-checked against Epoch AI | done |
-| v2 | Supply: what gets built, by fuel | planned |
+| v2 | Supply: what gets built, by fuel | first version, assumptions proposed |
 | v3 | Hourly adequacy: shortfall hours in every weather year | planned |
 | v4 | Flexibility analysis and dashboard launch | planned |
 
@@ -33,6 +33,7 @@ uv run gridkeepup build       # load everything into data/grid.duckdb
 uv run gridkeepup quality     # data quality report
 uv run gridkeepup demand      # v1 demand scenarios
 uv run gridkeepup crosscheck  # v1 vs Epoch AI's Texas data centers
+uv run gridkeepup supply      # v2 capacity by fuel and year
 uv run gridkeepup chart v1    # writes outputs/v1_demand_scenarios.html
 uv run streamlit run app/streamlit_app.py
 ```

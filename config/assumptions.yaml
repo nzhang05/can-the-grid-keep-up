@@ -75,9 +75,32 @@ crosscheck:               # v1 bottom-up check against Epoch AI's frontier AI da
     - Goodnight               # Claude, TX (Armstrong County, Panhandle)
     - Coreweave Helios        # Afton, TX (Dickens County)
 
-supply:                   # v2
-  completion_rate_source: "LBNL Queued Up"
-  completion_rates: {}        # TODO v2: by fuel and stage
+supply:                   # v2: PROPOSED, pending review (rationale in docs/supply-assumptions.md)
+  snapshot_year: 2026         # EIA-860M October 2026: the operating fleet is "today"
+  completion_rate_source: "EIA planned-vs-actual history; LBNL Queued Up 2026"
+
+  # Chance a planned unit reaches operation, by its EIA-860M status code.
+  status_probability:
+    TS: {low: 0.98, mid: 0.99, high: 1.00}   # construction complete, not yet in commercial operation
+    V:  {low: 0.90, mid: 0.95, high: 1.00}   # under construction, more than 50% complete
+    U:  {low: 0.80, mid: 0.90, high: 0.95}   # under construction, 50% complete or less
+    T:  {low: 0.50, mid: 0.65, high: 0.80}   # regulatory approvals received, not under construction
+    L:  {low: 0.30, mid: 0.45, high: 0.60}   # regulatory approvals pending, not under construction
+    P:  {low: 0.15, mid: 0.25, high: 0.40}   # planned, regulatory approvals not initiated
+    OT: {low: 0.25, mid: 0.40, high: 0.60}   # other
+
+  # Years added to the developer's planned online year.
+  status_delay_years:
+    TS: {low: 0, mid: 0, high: 0}
+    V:  {low: 1, mid: 0, high: 0}
+    U:  {low: 1, mid: 0, high: 0}
+    T:  {low: 1, mid: 1, high: 0}
+    L:  {low: 2, mid: 1, high: 0}
+    P:  {low: 2, mid: 1, high: 1}
+    OT: {low: 2, mid: 1, high: 1}
+
+  planned_storage_hours: 1.7  # planned batteries have no MWh in EIA-860M; today's fleet averages
+                              # ~1.7 h (33 GWh / 19.4 GW)
   thermal_forced_outage_rate: null   # TODO v3
 
 adequacy:                 # v3

@@ -5,6 +5,7 @@ and who decided it. If it shapes a number in a chart or a post, it is listed her
 
 **Status key**
 - **Decided**: chosen by the project owner after review
+- **Proposed**: drafted for review, used in results until decided
 - **Implementation**: a modelling choice made while building, open to challenge
 - **Convention**: a data-handling rule with little effect on results
 - **Open**: to be set in a later version
@@ -13,7 +14,7 @@ Values for anything in `config/assumptions.yaml` live there; change them in the 
 rerun. A test (`tests/test_assumptions_documented.py`) fails if a config assumption is not
 listed in this file.
 
-Last reviewed: 2026-11-26 (v1).
+Last reviewed: 2026-11-26 (v1 decided; v2 proposed).
 
 ## A. Scope
 
@@ -84,13 +85,34 @@ spread over connection years, then ramped linearly to full load.
 | E5 | Planned dates count | Epoch's future timeline entries are taken at face value | They are announced schedules; they may not reflect the pause, and facility power overstates grid draw for hybrid sites (A5) | `epoch.py` | Implementation |
 | E6 | Known gap | Late 2026: Epoch shows +0.7 GW, model high +0.45 GW | Explained by E5 (announced schedules, on-site gas), not adjusted for | this file | Accepted |
 
-## F. Not yet decided
+## F. Supply (v2)
+
+Formula: capacity(fuel, year) = today's operating fleet - planned retirements + planned
+units x P(built | EIA status) once their planned year + delay has passed. Expected values.
+Rationale and evidence: [supply-assumptions.md](supply-assumptions.md).
+
+| ID | Assumption | Value | Rationale | Where | Status |
+| --- | --- | --- | --- | --- | --- |
+| F1 | Snapshot | `snapshot_year` 2026: EIA-860M October 2026 operating fleet is "today" (176.5 GW) | Latest inventory available | config `supply` | Convention |
+| F2 | Capacity measure | Net summer MW | ERCOT peaks in summer; summer capacity is what plants can deliver in heat | `supply.py` | Implementation |
+| F3 | Completion probability by EIA status | `status_probability`: TS 98/99/100%, V 90/95/100%, U 80/90/95%, T 50/65/80%, L 30/45/60%, P 15/25/40%, OT 25/40/60% (low/mid/high) | EIA: ~78% of next-year plans come online on schedule, cancellations rare; LBNL: 13% of queue requests reach operation nationally, 22% in ERCOT, so early stages are far less certain | config `supply` | Proposed |
+| F4 | Delays | `status_delay_years` added to the planned year: 0 for TS; low case +1 year for V/U/T and +2 for L/P; mid +1 for T/L/P | ~20% of planned solar reports a delay, mostly short; early-stage projects slip more | config `supply` | Proposed |
+| F5 | Planned battery duration | `planned_storage_hours` 1.7 h | EIA-860M has no MWh for planned batteries; today's ERCOT fleet averages 1.71 h | config `supply` | Proposed |
+| F6 | Planned retirements | Units retire in their reported `planned_retirement_year` (~1.4 GW by 2030); no unannounced retirements | Only announced dates are public | `supply.py` | Implementation |
+| F7 | Expected values | A 500 MW unit at 25% adds 125 MW; no project-by-project draws | Simple and transparent; v3 can add uncertainty if needed | `supply.py` | Implementation |
+| F8 | Fuel groups | EIA technologies mapped to Nuclear, Coal (incl. petroleum coke), Gas, Wind, Solar, Storage, Hydro, Other | For charts and the adequacy model | `supply.py` (`FUEL_GROUPS`) | Convention |
+| F9 | Reporting horizon | Only projects already in EIA-860M count. Fast-to-build solar and storage for 2029-2030 are mostly not reported yet, so later years are understated | Fix: add ERCOT's interconnection queue | this file | Open (needs ERCOT queue) |
+| F10 | No fuel-specific odds | Same status odds for every fuel | Wind faces federal permitting headwinds and gas faces turbine supply limits, but no clean source yet for fuel-specific rates | this file | Open |
+| F11 | Behind-the-meter generation | Not in supply (on-site gas at data centers, e.g. Fermi America's planned 780 MW) | Decided in v3 as a peak-demand reducer (A5) | this file | Open (v3) |
+| F12 | Fermi America nuclear | 4.5 GW planned for 2031-2032 (status P) | After the 2030 horizon; no effect on v2 | data | Convention |
+
+## G. Not yet decided
 
 | ID | Assumption | Version |
 | --- | --- | --- |
-| F1 | Completion rates for planned generation, by fuel and stage (`completion_rates`, source `completion_rate_source`) | v2 |
-| F2 | Thermal outage rate (`thermal_forced_outage_rate`) | v3 |
-| F3 | Growth of non-data-center demand (`non_datacenter_load_growth`) | v3 |
-| F4 | Reliability standard used to judge shortfalls (`reliability_standard`: 1 day in 10 years) | v3 |
-| F5 | How behind-the-meter generation enters demand and supply (A5) | v2/v3 |
-| F6 | Filling whole missing days (C1) and adjusting Uri load (C3) | v3 |
+| G1 | Source behind completion rates (`completion_rate_source`) and review of F3 to F5 | v2 review |
+| G2 | Thermal outage rate (`thermal_forced_outage_rate`) | v3 |
+| G3 | Growth of non-data-center demand (`non_datacenter_load_growth`) | v3 |
+| G4 | Reliability standard used to judge shortfalls (`reliability_standard`: 1 day in 10 years) | v3 |
+| G5 | How behind-the-meter generation enters demand and supply (A5, F11) | v3 |
+| G6 | Filling whole missing days (C1) and adjusting Uri load (C3) | v3 |

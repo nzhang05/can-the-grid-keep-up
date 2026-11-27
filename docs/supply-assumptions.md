@@ -1,10 +1,11 @@
-# Supply assumptions (v2): proposal for review
+# Supply assumptions (v2)
 
-Status: **proposed, pending review.** Updated 2026-11-26 with ERCOT-specific completion
-rates computed from LBNL's project-level queue data and ERCOT's October 2026 interconnection
-report. Values live in [`config/assumptions.yaml`](../config/assumptions.yaml) under `supply`;
-every assumption is also in the [register](assumptions.md) (section F).
-Run `uv run gridkeepup supply`.
+Status: **decided 2026-11-27**, except the timing of ERCOT queue projects, which failed a
+sanity check and is switched off until fixed (see "Open: queue timing" below). Values live in
+[`config/assumptions.yaml`](../config/assumptions.yaml) under `supply`; every assumption is in
+the [register](assumptions.md) (section F). Values computed from data are recomputed by
+`uv run gridkeepup derive`, which writes inputs and arithmetic to
+[derived-values.md](derived-values.md). Run `uv run gridkeepup supply`.
 
 ## The question
 
@@ -26,8 +27,29 @@ coal -0.6, nuclear flat. The 2026 jump is the 9.4 GW already built and awaiting 
 operation.
 
 **2029-2030 is understated** because most projects for those years are not reported to EIA
-yet. The proposed fix below (ERCOT's interconnection report from 2028) is not implemented
-yet; it waits for your decision.
+yet. ERCOT's queue from 2028 (table 2) fixes that once its timing is calibrated.
+
+## Open: queue timing
+
+With the queue switched on as decided, mid-case capacity reaches 299 GW in 2030 and the model
+adds 44 GW in 2028 alone, about three times ERCOT's record year (15.3 GW in 2025; 13.7 GW in
+2024). The cause: ERCOT's completion rates are *eventual*. Applying them at each project's
+projected online date crams years of building into 2028.
+
+ERCOT history (LBNL, agreements signed to 2024, cohorts with enough follow-up), share of
+capacity online within k years of signing an agreement:
+
+| Fuel | 1 year | 2 years | 3 years | 4 years |
+| --- | --- | --- | --- | --- |
+| Gas | 2% | 24% | 38% | 39% |
+| Solar | 1% | 12% | 34% | 47% |
+| Batteries | 1% | 3% | 16% | 75% |
+| Wind | 2% | 24% | 42% | 49% |
+
+Proposed fix: for each queue project, the chance it is online by year Y comes from these
+curves, based on how long ago it signed (or entered the queue, for study-only projects) and
+conditional on it not being online yet. The queue stays off (`enabled: false`) until decided,
+so published results use EIA-860M only.
 
 ## Evidence
 
@@ -53,8 +75,8 @@ is far along.
 Two readings: **gas withdraws often** after signing (43%), and **batteries rarely withdraw**
 (10%) but take longest, so their 42% completion is a floor, not a forecast.
 
-Method: `03. Complete Queue Data`, `region == "ERCOT"`, capacity-weighted on `mw_1`;
-reproducible script to be added with the implementation.
+Method: `03. Complete Queue Data`, `region == "ERCOT"`, capacity-weighted on `mw_1`, suspended
+counted as withdrawn. Reproduced by `src/gridkeepup/lbnl.py`; `gridkeepup derive` prints it.
 
 ### National context
 
@@ -91,7 +113,7 @@ Chance a planned unit reaches operation, by EIA status:
 | L | Approvals pending | 30% | 40% | 55% | 2 / 1 / 0 | Between T and P (was 45%) |
 | P | Planned, no approvals | 15% | **24%** | 35% | 2 / 1 / 1 | ERCOT request completion (was 25%) |
 
-### 2. Source split by year (proposed, not yet implemented)
+### 2. Source split by year (decided; implemented, switched off pending queue timing)
 
 EIA and ERCOT list many of the same projects under different names: matching by name and
 county links only about 10% of them, so the lists cannot simply be merged. Proposal:
@@ -102,10 +124,11 @@ county links only about 10% of them, so the lists cannot simply be merged. Propo
 | New projects with a planned online year up to 2027 | EIA-860M planned (table 1) |
 | New projects with a projected online date from 2028 | ERCOT GIS report (table 3), replacing EIA's 2028+ entries |
 
-Risk: a project in EIA for 2027 that ERCOT lists for 2028 is counted twice. Likely small;
-to be measured when implemented and recorded in the register.
+Measured risk: name and county matching finds 18 projects (3.5 GW nameplate) that EIA lists
+for 2026-2027 and ERCOT lists for 2028, which would count twice. Small next to the pipeline;
+recorded in the register (F17).
 
-### 3. ERCOT GIS projects from 2028 (proposed, not yet implemented)
+### 3. ERCOT GIS projects from 2028 (decided; timing open)
 
 Stage from the report's milestone dates. For projects with a signed agreement, odds come
 straight from ERCOT's history with one rule: **low = share already operating, mid = operating
@@ -120,12 +143,17 @@ straight from ERCOT's history with one rule: **low = share already operating, mi
 Study only sits below ERCOT's 24% eventual completion because a project still in study must
 also sign an agreement and build (1.8 to 3.3 years) to make 2030.
 
-Capacity conversion: ERCOT reports nameplate MW; convert to summer MW with today's fleet ratios
-from EIA-860M (gas 0.89, solar 1.00, wind 1.00, batteries 0.99).
+Other fuels in the queue (nuclear, hydro, other) use the all-ERCOT rate: 56 / 64 / 73%.
+
+Capacity conversion: ERCOT reports nameplate MW. Each fuel's ratio is net summer MW / nameplate
+MW of today's operating fleet (EIA-860M): gas 62,175 / 69,930 = 0.89; solar 1.00; wind 1.00;
+batteries 0.99.
 
 ### 4. Other
 
-- Planned batteries: 1.7 hours of storage (today's ERCOT fleet average, 33 GWh / 19.4 GW).
+- Planned batteries: 1.7 hours of storage. Derived: EIA-860M has no MWh for planned batteries,
+  so they get today's ERCOT fleet average: 33,021 MWh / 19,605 MW nameplate across 270
+  operating batteries = 1.68, rounded to 1.7 hours.
 - Retirements: only announced dates (about 1.4 GW by 2030).
 - Fermi America's 4.5 GW of planned nuclear (Carson County) is for 2031-2032, after the horizon.
 
@@ -136,10 +164,12 @@ from EIA-860M (gas 0.89, solar 1.00, wind 1.00, batteries 0.99).
   hourly model in v3 tests; installed GW overstates solar and wind at evening peaks.
 - Gas turbine supply limits and wind permitting headwinds beyond what ERCOT's history shows.
 
-## Decisions for review
+## Decisions (2026-11-27)
 
-- [ ] EIA status odds (table 1), including the ERCOT-based changes to T, L and P?
-- [ ] Delays as proposed?
-- [ ] Source split by year: EIA to 2027, ERCOT GIS from 2028 (table 2)?
-- [ ] ERCOT GIS stage odds and the low / mid / high rule (table 3)?
-- [ ] 1.7-hour duration for planned batteries, and nameplate-to-summer conversion for ERCOT MW?
+- [x] EIA status odds (table 1), including the ERCOT-based changes to T, L and P
+- [x] Delays as proposed
+- [x] Source split by year: EIA to 2027, ERCOT GIS from 2028 (table 2)
+- [x] ERCOT GIS stage odds and the low / mid / high rule (table 3)
+- [x] 1.7-hour duration for planned batteries, nameplate-to-summer conversion for ERCOT MW;
+  every derived value states its inputs and arithmetic (derived-values.md)
+- [ ] Queue timing: time-based completion curves from ERCOT history (open)

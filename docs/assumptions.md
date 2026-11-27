@@ -9,12 +9,15 @@ and who decided it. If it shapes a number in a chart or a post, it is listed her
 - **Implementation**: a modelling choice made while building, open to challenge
 - **Convention**: a data-handling rule with little effect on results
 - **Open**: to be set in a later version
+- **Derived**: computed from data with a stated method (see derived-values.md)
 
 Values for anything in `config/assumptions.yaml` live there; change them in the config and
-rerun. A test (`tests/test_assumptions_documented.py`) fails if a config assumption is not
+rerun. Values computed from data (marked **Derived**) are recomputed from the raw files by
+`uv run gridkeepup derive`, which writes the inputs and arithmetic to
+[derived-values.md](derived-values.md); a test fails if the config and the data disagree. A test (`tests/test_assumptions_documented.py`) fails if a config assumption is not
 listed in this file.
 
-Last reviewed: 2026-11-26 (v1 decided; v2 proposed).
+Last reviewed: 2026-11-27 (v1 and v2 decided; queue timing F19 open).
 
 ## A. Scope
 
@@ -90,35 +93,37 @@ spread over connection years, then ramped linearly to full load.
 ## F. Supply (v2)
 
 Formula: capacity(fuel, year) = today's operating fleet - planned retirements + planned
-units x P(built | EIA status) once their planned year + delay has passed. Expected values.
-Rationale and evidence: [supply-assumptions.md](supply-assumptions.md).
+units x P(built | stage) once their planned year + delay has passed. Expected values.
+Rationale and evidence: [supply-assumptions.md](supply-assumptions.md). Decided 2026-11-27,
+except the ERCOT queue timing (F19), which is switched off pending calibration.
 
 | ID | Assumption | Value | Rationale | Where | Status |
 | --- | --- | --- | --- | --- | --- |
 | F1 | Snapshot | `snapshot_year` 2026: EIA-860M October 2026 operating fleet is "today" (176.5 GW) | Latest inventory available | config `supply` | Convention |
 | F2 | Capacity measure | Net summer MW | ERCOT peaks in summer; summer capacity is what plants can deliver in heat | `supply.py` | Implementation |
-| F3 | Completion probability by EIA status | `status_probability`: TS 98/99/100%, V 90/95/100%, U 80/90/95%, T 45/56/70%, L 30/40/55%, P 15/24/35%, OT 25/40/60% (low/mid/high) | ERCOT history (LBNL, computed): 56% of capacity reaches operation after signing an agreement, 24% of all requests; EIA: ~78% of next-year plans come online on schedule | config `supply` | Proposed |
-| F4 | Delays | `status_delay_years` added to the planned year: 0 for TS; low case +1 year for V/U/T and +2 for L/P; mid +1 for T/L/P | ~20% of planned solar reports a delay, mostly short; completed ERCOT projects came online close to their last reported date; early-stage projects slip more | config `supply` | Proposed |
-| F5 | Planned battery duration | `planned_storage_hours` 1.7 h | EIA-860M has no MWh for planned batteries; today's ERCOT fleet averages 1.71 h | config `supply` | Proposed |
+| F3 | Completion probability by EIA status | `status_probability`: TS 98/99/100%, V 90/95/100%, U 80/90/95%, T 45/56/70%, L 30/40/55%, P 15/24/35%, OT 25/40/60% (low/mid/high) | T mid = share of ERCOT capacity operating after signing an agreement (2000-2022 agreements: 56.1%); P mid = share of all ERCOT requests 2000-2020 operating (24.3%); construction stages from EIA's 78-86% on-schedule history; other values set around these anchors, monotonic by stage | config `supply` | Decided (T and P mid: Derived) |
+| F4 | Delays | `status_delay_years` added to the planned year: 0 for TS; low case +1 year for V/U/T and +2 for L/P; mid +1 for T/L/P | ~20% of planned solar reports a delay, mostly short; completed ERCOT projects came online close to their last reported date; early-stage projects slip more | config `supply` | Decided |
+| F5 | Planned battery duration | `planned_storage_hours` 1.7 h | Derived: EIA-860M has no MWh for planned batteries, so they get today's ERCOT fleet average: 33,021 MWh / 19,605 MW nameplate across 270 operating batteries = 1.68, rounded to 1.7 h | config `supply` | Derived |
 | F6 | Planned retirements | Units retire in their reported `planned_retirement_year` (~1.4 GW by 2030); no unannounced retirements | Only announced dates are public | `supply.py` | Implementation |
 | F7 | Expected values | A 500 MW unit at 25% adds 125 MW; no project-by-project draws | Simple and transparent; v3 can add uncertainty if needed | `supply.py` | Implementation |
 | F8 | Fuel groups | EIA technologies mapped to Nuclear, Coal (incl. petroleum coke), Gas, Wind, Solar, Storage, Hydro, Other | For charts and the adequacy model | `supply.py` (`FUEL_GROUPS`) | Convention |
-| F9 | Reporting horizon | Only projects already in EIA-860M count. Fast-to-build solar and storage for 2029-2030 are mostly not reported yet, so later years are understated | Fix proposed in F13 | this file | Open (pending F13) |
+| F9 | Reporting horizon | Only projects already in EIA-860M count. Fast-to-build solar and storage for 2029-2030 are mostly not reported yet, so later years are understated | Fix: ERCOT queue from 2028 (F13), switched off until F19 is resolved | this file | Open (pending F19) |
 | F10 | No fuel-specific odds | Same status odds for every fuel | Wind faces federal permitting headwinds and gas faces turbine supply limits, but no clean source yet for fuel-specific rates | this file | Open |
 | F11 | Behind-the-meter generation | Not in supply (on-site gas at data centers, e.g. Fermi America's planned 780 MW) | Decided in v3 as a peak-demand reducer (A5) | this file | Open (v3) |
 | F12 | Fermi America nuclear | 4.5 GW planned for 2031-2032 (status P) | After the 2030 horizon; no effect on v2 | data | Convention |
-| F13 | Source split by year | EIA-860M for the fleet, retirements and projects planned up to 2027; ERCOT GIS report for projects with projected online dates from 2028, replacing EIA's 2028+ entries | The two lists name projects differently (name + county matching links ~10%), so they cannot be merged; a year split avoids double counting | supply-assumptions.md | Proposed (not implemented) |
-| F14 | ERCOT GIS stage odds | Construction started 80/90/95%; agreement signed by fuel: wind 69/74/80%, gas 54/56/57%, solar 50/67/83%, batteries 42/66/90%; study only 10/20/30%. Rule for signed agreements: low = share operating, mid = + half still in progress, high = + all still in progress | ERCOT projects with agreements signed 2000-2022 (LBNL); study-only projects must still sign and build (1.8 to 3.3 years) to make 2030 | supply-assumptions.md | Proposed (not implemented) |
-| F15 | ERCOT GIS delays | Construction and signed: +1 / 0 / 0 years; study only: +2 / +1 / 0 (low / mid / high) | As F4 | supply-assumptions.md | Proposed (not implemented) |
-| F16 | Nameplate to summer MW | ERCOT GIS MW x today's fleet ratio by fuel (gas 0.89, solar 1.00, wind 1.00, batteries 0.99) | GIS reports nameplate; the model uses summer capacity | supply-assumptions.md | Proposed (not implemented) |
-| F17 | Double counting at the 2027/2028 boundary | A project listed by EIA for 2027 and by ERCOT for 2028 may count twice | Measure when F13 is implemented | this file | Open |
+| F13 | Source split by year | `ercot_gis` `first_year` 2028: EIA-860M for the fleet, retirements and projects planned up to 2027; ERCOT GIS report for projects with projected online dates from 2028, replacing EIA's 2028+ entries. `enabled` switches the queue on or off | The two lists name projects differently (name + county matching links ~10%), so they cannot be merged; a year split avoids double counting | config `supply.ercot_gis` | Decided (currently off, see F19) |
+| F14 | ERCOT GIS stage odds | `stage_probability`: synchronized and energized 98/99/100% (as EIA TS); construction 80/90/95% (as EIA U); signed by fuel: wind 69/74/80%, gas 54/56/57%, solar 50/67/83%, storage 42/66/90%, other (nuclear, hydro, other) 56/64/73%; study 10/20/30% | Signed: Derived from ERCOT projects with agreements signed 2000-2022 (LBNL), low = share operating, mid = + half still in progress, high = + all still in progress; other = all-fuel rate. Study: below the 24% eventual completion because study-only projects must still sign and build (1.8 to 3.3 years) to make 2030 | config `supply.ercot_gis` | Decided (signed: Derived) |
+| F15 | ERCOT GIS delays | `stage_delay_years`: synchronized and energized 0; construction and signed +1 / 0 / 0; study +2 / +1 / 0 (low / mid / high) | As F4 | config `supply.ercot_gis` | Decided |
+| F16 | Nameplate to summer MW | `summer_ratio`: gas 0.89, solar 1.0, wind 1.0, storage 0.99, other 1.0 | Derived: ERCOT reports nameplate MW; ratio = net summer MW / nameplate MW of today's operating fleet (e.g. gas 62,175 / 69,930 = 0.89). Other set to 1.0 (too few queued projects to matter) | config `supply.ercot_gis` | Derived |
+| F17 | Double counting at the 2027/2028 boundary | Name + county matching finds 18 projects (3.5 GW nameplate) listed by EIA for 2026-2027 and by ERCOT for 2028 | Loose matching, so an indication; `supply.boundary_overlap()` lists them | this file | Accepted (measured) |
 | F18 | ERCOT fuel codes | GIS "OTH" with technology "BA" = batteries | 828 of 832 OTH projects are BA | data | Convention |
+| F19 | Queue timing | Eventual completion odds (F14) applied at the projected online date (+ F15 delays) put ~44 GW of additions in 2028 (mid), about 3x ERCOT's record year (15.3 GW in 2025). ERCOT history shows completion is spread over years after an agreement: 3-24% online within 2 years, 39-75% within 4 (by fuel) | Proposed fix: time-based, conditional completion curves from ERCOT history; queue switched off (`enabled: false`) until decided | supply-assumptions.md | Open |
 
 ## G. Not yet decided
 
 | ID | Assumption | Version |
 | --- | --- | --- |
-| G1 | Source behind completion rates (`completion_rate_source`) and review of F3 to F5 | v2 review |
+| G1 | Source behind completion rates (`completion_rate_source`): LBNL project data, computed (B10) | Done (v2) |
 | G2 | Thermal outage rate (`thermal_forced_outage_rate`) | v3 |
 | G3 | Growth of non-data-center demand (`non_datacenter_load_growth`) | v3 |
 | G4 | Reliability standard used to judge shortfalls (`reliability_standard`: 1 day in 10 years) | v3 |

@@ -39,7 +39,7 @@ def test_status_code_and_fuel_groups():
 
 def test_project_applies_probability_delay_and_retirement():
     a = _assumptions()
-    out = supply.project(_inventory(), a)
+    out = supply.project(_inventory(), a, gis=pd.DataFrame())
     mid = out[out["scenario"] == "mid"].pivot(index="year", columns="fuel", values="capacity_gw")
     p_u, p_p = a.probability["U"]["mid"], a.probability["P"]["mid"]
     d_p = a.delay_years["P"]["mid"]
@@ -53,7 +53,7 @@ def test_project_applies_probability_delay_and_retirement():
 
 def test_storage_energy_uses_fleet_mwh_and_planned_hours():
     a = _assumptions(planned_storage_hours=2.0)
-    out = supply.project(_inventory(), a)
+    out = supply.project(_inventory(), a, gis=pd.DataFrame())
     st = out[(out["scenario"] == "high") & (out["fuel"] == "Storage")].set_index("year")
     assert st.loc[2026, "storage_gwh"] == pytest.approx(0.2 + 0.05 * 2.0, abs=1e-3)
     assert out.attrs["operating_storage_hours"] == 2.0
@@ -63,11 +63,11 @@ def test_unknown_status_code_is_an_error():
     inv = _inventory()
     inv["planned"].loc[0, "status"] = "(XX) Something new"
     with pytest.raises(ValueError, match="XX"):
-        supply.project(inv, _assumptions())
+        supply.project(inv, _assumptions(), gis=pd.DataFrame())
 
 
 def test_scenarios_ordered_and_low_never_above_high():
-    out = supply.project(_inventory(), _assumptions())
+    out = supply.project(_inventory(), _assumptions(), gis=pd.DataFrame())
     t = supply.totals(out)
     assert (t["low"] <= t["mid"]).all() and (t["mid"] <= t["high"]).all()
 

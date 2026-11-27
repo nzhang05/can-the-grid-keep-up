@@ -8,7 +8,8 @@
   quality               per-year data quality report for hourly demand
   demand                v1 data center demand scenarios (from config/assumptions.yaml)
   crosscheck            compare the demand model with Epoch AI's Texas data centers
-  supply                v2 installed capacity by fuel and year (from EIA-860M)
+  supply                v2 installed capacity by fuel and year
+  derive                recompute every data-derived config value; write docs/derived-values.md
   chart v0|v1|v2        write outputs/<name>_*.html
 """
 
@@ -120,8 +121,27 @@ def cmd_supply(_: argparse.Namespace) -> int:
         print("\nMid scenario by fuel, GW:")
         mid = p[p["scenario"] == "mid"].pivot(index="year", columns="fuel", values="capacity_gw")
         print(mid[supply.FUEL_ORDER].round(1).to_string())
-        print("\nPlanned GW by EIA status, and what each scenario counts by the horizon end:")
-        print(supply.additions_by_status().to_string())
+        print(f"\nSources: {p.attrs['sources']}. Pipeline GW by source and stage, and what each")
+        print("scenario counts by the horizon end:")
+        print(supply.additions_by_stage().to_string())
+    return 0
+
+
+def cmd_derive(_: argparse.Namespace) -> int:
+    from gridkeepup import derive, lbnl
+    derived = derive.derive_all()
+    if not derived:
+        print("No raw data found (EIA-860M, LBNL). Download them first.")
+        return 1
+    for d in derived:
+        print(f"{d.key} = {d.value:g}\n    inputs: {d.inputs}\n    method: {d.method}")
+    derive.write_markdown(derived, derive.informational(lbnl.load_ercot()))
+    print("\nwrote docs/derived-values.md")
+    bad = derive.mismatches(derived)
+    if bad:
+        print("\nConfig does not match the data:\n  " + "\n  ".join(bad))
+        return 1
+    print("Config matches the data.")
     return 0
 
 
@@ -152,6 +172,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("demand").set_defaults(fn=cmd_demand)
     sub.add_parser("crosscheck").set_defaults(fn=cmd_crosscheck)
     sub.add_parser("supply").set_defaults(fn=cmd_supply)
+    sub.add_parser("derive").set_defaults(fn=cmd_derive)
     chart = sub.add_parser("chart")
     chart.add_argument("name", choices=["v0", "v1", "v2"])
     chart.set_defaults(fn=cmd_chart)

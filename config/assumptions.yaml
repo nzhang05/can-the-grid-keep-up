@@ -75,7 +75,8 @@ crosscheck:               # v1 bottom-up check against Epoch AI's frontier AI da
     - Goodnight               # Claude, TX (Armstrong County, Panhandle)
     - Coreweave Helios        # Afton, TX (Dickens County)
 
-supply:                   # v2: PROPOSED, pending review (rationale in docs/supply-assumptions.md)
+supply:                   # v2: decided 2026-11-27 (rationale in docs/supply-assumptions.md;
+                          # values computed from data are recomputed by `gridkeepup derive`)
   snapshot_year: 2026         # EIA-860M October 2026: the operating fleet is "today"
   completion_rate_source: "LBNL Queued Up 2026 (ERCOT projects, computed); EIA planned-vs-actual history"
 
@@ -101,8 +102,41 @@ supply:                   # v2: PROPOSED, pending review (rationale in docs/supp
     P:  {low: 2, mid: 1, high: 1}
     OT: {low: 2, mid: 1, high: 1}
 
-  planned_storage_hours: 1.7  # planned batteries have no MWh in EIA-860M; today's fleet averages
-                              # ~1.7 h (33 GWh / 19.4 GW)
+  planned_storage_hours: 1.7  # derived: planned batteries have no MWh in EIA-860M, so they get
+                              # today's ERCOT fleet average, 33,021 MWh / 19,605 MW nameplate = 1.7 h
+
+  # ERCOT's interconnection queue (GIS report) for new projects from first_year on; EIA-860M
+  # planned projects are used up to the year before. Avoids double counting: the two lists
+  # name projects differently and cannot be merged reliably.
+  ercot_gis:
+    enabled: false            # off until queue timing is calibrated: applying eventual completion
+                              # odds at projected online dates adds ~44 GW in 2028, 3x ERCOT's record
+    first_year: 2028
+    stage_probability:
+      synchronized: {low: 0.98, mid: 0.99, high: 1.00}   # as EIA status TS
+      energized:    {low: 0.98, mid: 0.99, high: 1.00}   # as EIA status TS
+      construction: {low: 0.80, mid: 0.90, high: 0.95}   # as EIA status U
+      study:        {low: 0.10, mid: 0.20, high: 0.30}   # below the 24% eventual completion: must
+                                                         # still sign and build in time for 2030
+      signed:       # derived from ERCOT history (LBNL): low = operating, mid = + half still in
+                    # progress, high = + all still in progress; Other = all-fuel rate
+        Wind:    {low: 0.69, mid: 0.74, high: 0.80}
+        Gas:     {low: 0.54, mid: 0.56, high: 0.57}
+        Solar:   {low: 0.50, mid: 0.67, high: 0.83}
+        Storage: {low: 0.42, mid: 0.66, high: 0.90}
+        Other:   {low: 0.56, mid: 0.64, high: 0.73}
+    stage_delay_years:
+      synchronized: {low: 0, mid: 0, high: 0}
+      energized:    {low: 0, mid: 0, high: 0}
+      construction: {low: 1, mid: 0, high: 0}
+      signed:       {low: 1, mid: 0, high: 0}
+      study:        {low: 2, mid: 1, high: 0}
+    summer_ratio:   # derived: ERCOT reports nameplate MW; net summer / nameplate of today's fleet
+      Gas: 0.89
+      Solar: 1.0
+      Wind: 1.0
+      Storage: 0.99
+      Other: 1.0    # nuclear, hydro, other: too few queued projects to matter
   thermal_forced_outage_rate: null   # TODO v3
 
 adequacy:                 # v3

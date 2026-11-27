@@ -13,7 +13,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from gridkeepup import config, lbnl, supply
-from gridkeepup.fetch import eia860m
+from gridkeepup.fetch import eia860m, eia930
 from gridkeepup.paths import DERIVED_DIR, ROOT
 
 CURVES_PATH = DERIVED_DIR / "completion_curves.csv"
@@ -123,6 +123,35 @@ def anchor_rates(e: pd.DataFrame) -> list[Derived]:
     ]
 
 
+def adequacy_values() -> list[Derived]:
+    """v3 inputs computed from data: load growth rates and the calibrated unmodeled MW."""
+    from gridkeepup import adequacy
+    g = adequacy.derive_peak_growth()
+    src = "EIA-930 hourly demand; data/manual/ercot_reference.csv"
+    mid = round(g["without_large_loads"], 3)
+    out = [Derived("adequacy.peak_growth_to_reference", round(g["with_large_loads"], 3),
+                   f"ERCOT annual peak {g['peak_2019_mw']:,.0f} MW (2019, EIA-930) and "
+                   f"{g['peak_2026_mw']:,.0f} MW (2026 record)",
+                   "(peak 2026 / peak 2019)^(1/7) - 1, rounded to 0.001", src)]
+    for scen, shift in (("low", -0.01), ("mid", 0.0), ("high", 0.01)):
+        out.append(Derived(
+            f"adequacy.non_datacenter_load_growth.{scen}", round(mid + shift, 3),
+            f"same peaks, 2026 minus {g['large_load_2026_mw']:,.0f} MW observed peak of "
+            "approved large loads (Jul 2026)",
+            "mid = ((peak 2026 - large loads) / peak 2019)^(1/7) - 1; low / high = mid -/+ "
+            "0.01 (judgment)", src))
+    c = adequacy.calibrate()
+    out.append(Derived(
+        "adequacy.unmodeled_resources_mw", float(c["unmodeled_mw"]),
+        f"ERCOT emergency days {min(c['years'])}-{max(c['years'])} outside Uri: "
+        f"{c['target_days']} (model without it: {c['model_days_uncalibrated']})",
+        "MW of extra firm supply so the model's expected days with reserves under 2,300 MW "
+        "equal history (bisection, rounded to 50 MW); model days by year: "
+        + ", ".join(f"{y} {v}" for y, v in c["model_days_by_year"].items()),
+        "EIA-930, EIA-860M; ERCOT EEA history (docs/adequacy-assumptions.md)"))
+    return out
+
+
 def derive_all() -> list[Derived]:
     out: list[Derived] = []
     inv = eia860m.load_latest()
@@ -132,6 +161,8 @@ def derive_all() -> list[Derived]:
     e = lbnl.load_ercot()
     if not e.empty:
         out += completion_odds(e) + study_odds(e) + anchor_rates(e)
+    if inv and eia930.load("demand").shape[0]:
+        out += adequacy_values()
     return out
 
 

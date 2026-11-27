@@ -17,7 +17,7 @@ rerun. Values computed from data (marked **Derived**) are recomputed from the ra
 [derived-values.md](derived-values.md); a test fails if the config and the data disagree. A test (`tests/test_assumptions_documented.py`) fails if a config assumption is not
 listed in this file.
 
-Last reviewed: 2026-11-27 (v1 and v2 decided).
+Last reviewed: 2026-11-27 (v1 and v2 decided; v3 proposed).
 
 ## A. Scope
 
@@ -124,13 +124,44 @@ Rationale and evidence: [supply-assumptions.md](supply-assumptions.md). Decided 
 | F23 | Tax-credit cliff | `tax_credit_factor`: queue Solar and Wind at stages signed and study get odds x 0 / 0.5 / 1 (low / mid / high). Storage, gas and projects under construction unaffected | Federal wind and solar credits end for projects starting construction after 4 Jul 2026 and in service after 2027 (OBBBA, 2025). History has no such break, and ERCOT's report does not show tax-purpose construction starts. Judgment bracket (none / half / all proceed), not derived. Mid 2030 effect: -21.5 GW | config `supply.ercot_gis.tax_credit_factor` | Decided (judgment) |
 | F24 | No build-rate limit | The model does not cap how much ERCOT can connect or developers can build in a year. Mid additions are 27-29 GW/yr in 2028-2030 vs a record 15.3 GW (2025); low is 13-17 GW/yr | No clean source for such a limit. Mid batteries (55 GW by 2029) sit at the top of Modo Energy's 40-55 GW outlook. Largest open uncertainty in supply | supply-assumptions.md | Accepted (stated) |
 
+| F25 | EIA-860M solar below ERCOT's count | EIA-860M lists 33.9 GW of ERCOT solar (Oct 2026, net summer); ERCOT reports 38.6 GW utility-scale solar installed as of March 2026, and a 34.5 GW output record in May 2026 | Today's solar in v2 is likely understated by ~5 GW. v3 is unaffected: its solar capacity factors are measured against the same EIA MW (F/H5) | supply-assumptions.md | Open |
+
+## H. Hourly adequacy (v3)
+
+Method: for each year 2026-2030, demand scenario x supply scenario x weather year (2019-2023),
+every hour: thermal plants must cover load + reserve - wind - solar - hydro - private use
+networks - unmodeled resources (+ winter storm outages), after batteries. A capacity outage
+probability table (COPT) of thermal units gives the chance they fall short. Rationale and
+evidence: [adequacy-assumptions.md](adequacy-assumptions.md). Proposed 2026-11-27.
+
+| ID | Assumption | Value | Rationale | Where | Status |
+| --- | --- | --- | --- | --- | --- |
+| H1 | Weather years | Every local calendar year with complete EIA-930 load and generation: 2019-2023 now; 2024-2025 once 2025 demand is downloaded. Equal weight, except rare events (H11) | Load, wind and solar come from the same real hours, so their correlation (hot still evenings, iced turbines) is kept | `adequacy.weather_profiles` | Proposed |
+| H2 | Load scaled to 2026 | `reference_year` 2026; each weather year's hourly load x (1 + `peak_growth_to_reference`)^(2026 - year), with `peak_growth_to_reference` 0.029 | Derived: ERCOT annual peak 74,533 MW in 2019 (EIA-930) to 91,134 MW in 2026: (91,134 / 74,533)^(1/7) - 1. Check: 2023 weather at 2026 level peaks at ~93 GW vs ERCOT's 94.9 GW estimate for 2026 without demand response | config `adequacy` | Derived |
+| H3 | Growth of non-data-center load | `non_datacenter_load_growth` 1.2 / 2.2 / 3.2% a year from 2026, all hours | Derived mid: same peaks, with 2026 minus the 4,370 MW observed peak of approved large loads (Jul 2026): ((91,134 - 4,370) / 74,533)^(1/7) - 1. Low / high = mid -/+ 1 point (judgment). Follows the demand scenario | config `adequacy` | Derived (mid) |
+| H4 | New data center load | `datacenter_profile` flat: v1 `peak_gw` (connected x ramp x 0.9 peak factor) in every hour | Data centers run near-flat; the peak-coincident value matters in tight hours. Overstates energy (v1 load factor is 0.7) but energy does not drive shortfalls | config `adequacy` | Proposed |
+| H5 | Wind and solar output | Each weather hour's EIA-930 output / EIA-860M net summer MW installed that month (rebuilt from unit online dates), x the year's v2 capacity. Values up to 1.3 kept (ERCOT solar output exceeds EIA-listed MW at times, F25) | Same MW measure as v2, so the projection is consistent. Includes historical icing, curtailment and outages | `adequacy.weather_profiles` | Proposed |
+| H6 | Uri load | `uri_rebuild`: load-shed hours (15-19 Feb 2021) replaced by the 24 hours before shedding, repeated and scaled to ERCOT's estimate of demand without load shed (76,819 MW); never lowered | Recorded load during Uri is what was served, not what was wanted. Resolves G6 / C3 | config `adequacy` | Proposed |
+| H7 | Thermal fleet | Today's non-CHP gas, coal, nuclear and other units, minus announced retirements, plus v2's expected additions as `new_thermal_unit_mw` 200 MW units. Net summer MW, net winter in `winter_months` (Dec-Feb). No planned maintenance in the model | Unit-level outage modelling needs units. Planned maintenance is scheduled in mild months | `adequacy.thermal_units` | Proposed |
+| H8 | Private use networks | `chp_counted_as`: CHP units (11.7 GW in EIA-860M) replaced by ERCOT's net export from private use networks: 3,194 MW summer / 4,283 MW winter | CHP serves on-site industrial load first; ERCOT counts only what reaches the grid (CDR May 2025). Non-CHP thermal (70.2 GW) is then close to ERCOT's 65.8 GW + switchable units | config `adequacy`; ercot_reference.csv | Proposed |
+| H9 | Thermal forced outage rates | `thermal_forced_outage_rate` by EIA technology: Natural Gas Fired Combined Cycle 5.7%, Conventional Steam Coal and Petroleum Coke 14.1%, Nuclear 3% (judgment), `default` 9.2% (everything else, incl. new gas); units fail independently | NERC 2026 State of Reliability (2025 data): CC 5.7%, coal 14.1%, all conventional 9.2%. No current NERC nuclear figure found; 5 GW, small effect | config `adequacy` | Proposed |
+| H10 | Winter storm outages | `winter_storms`: extra thermal outage = `thermal_out_mw` - expected normal outages, during each storm window: `uri` 14,000 MW (Elliott's level), `elliott` 14,000, `heather` 7,000 | Thermal offline: Uri 31 GW, Elliott 14 GW, Heather 7 GW (CSIS citing GridStatus.io). Uri uses Elliott's level because plants winterized after 2021 (SB 3) and Elliott came after | config `adequacy` | Proposed |
+| H11 | Rare events | `rare_events`: the Uri week counts at its `annual_probability` 0.02 instead of 1 in 5 weather years | Texas state climatologist: about a 1 in 50 chance each winter of a Uri-like storm | config `adequacy` | Proposed |
+| H12 | Batteries | Start full; discharge only when need exceeds what thermal covers at the `charge_safe_quantile` (0.1%) level, shaving the highest excess in the next 24 hours with the energy on hand; recharge when that level covers need + charging; `storage_round_trip` 0.82; power and energy from v2 (planned at 1.7 h) | Simple foresight of one day, no market behaviour. 82% = EIA, US utility-scale batteries (2019) | `adequacy.dispatch_storage` | Proposed |
+| H13 | Reserve | `reserve_mw` 1,500: a shortfall is when firm load + 1,500 MW exceeds supply | ERCOT sheds firm load (EEA3) to keep 1,500 MW of reserves; PUCT's standard counts a loss-of-load event the same way | config `adequacy` | Proposed |
+| H14 | Unmodeled resources (calibration) | `unmodeled_resources_mw` 5,600: extra firm supply in every hour, fitted so the model's expected emergency days in 2019-2023 (outside Uri) equal ERCOT's 3 (`calibration`: `eea_days` 3, `eea_reserve_mw` 2,300) | Without it the model sees 74 emergency days in 2019-2023 on the fleets of the time vs 3 declared (EEA1 twice in Aug 2019, EEA2 on 6 Sep 2023). Stands for DC tie imports, emergency demand response and load resources, conservation, and lower outages at peak than annual averages. Held constant to 2030 | config `adequacy`; derived-values.md | Derived (calibrated) |
+| H15 | Metrics | LOLE = expected events per year, counted as days with a shortfall (sum of each day's highest hourly chance); LOLH = expected hours; EUE = expected unserved energy. Standard `reliability_standard` 0.1 LOLE (PUCT, 16 TAC 25.508). PUCT's duration and magnitude criteria are not tested | Daily counting is the usual approximation of events from hourly chances | config `adequacy` | Proposed |
+| H16 | Headroom | Extra flat load (GW) that brings expected LOLE to 0.1 (bisection), positive = room, negative = load that must come off in risky hours | Turns a probability into GW of data centers | `adequacy.headroom` | Proposed |
+| H17 | Grid limits | ERCOT treated as one node: no transmission limits, no gas supply curtailment beyond H10 | System-wide test; local constraints (e.g. Far West) are out of scope | this file | Accepted (stated) |
+| H18 | Settings | `copt_step_mw` 10 (outage table resolution) | Numerical; finer steps change results by under 1% | config `adequacy` | Convention |
+
 ## G. Not yet decided
 
 | ID | Assumption | Version |
 | --- | --- | --- |
 | G1 | Source behind completion rates (`completion_rate_source`): LBNL project data, computed (B10) | Done (v2) |
-| G2 | Thermal outage rate (`thermal_forced_outage_rate`) | v3 |
-| G3 | Growth of non-data-center demand (`non_datacenter_load_growth`) | v3 |
-| G4 | Reliability standard used to judge shortfalls (`reliability_standard`: 1 day in 10 years) | v3 |
-| G5 | How behind-the-meter generation enters demand and supply (A5, F11) | v3 |
-| G6 | Filling whole missing days (C1) and adjusting Uri load (C3) | v3 |
+| G2 | Thermal outage rate (`thermal_forced_outage_rate`) | Proposed (H9) |
+| G3 | Growth of non-data-center demand (`non_datacenter_load_growth`) | Proposed (H3) |
+| G4 | Reliability standard used to judge shortfalls (`reliability_standard`: 0.1 LOLE) | Proposed (H15) |
+| G5 | How behind-the-meter generation enters demand and supply (A5, F11) | Not modelled in v3; v4 (flexibility) |
+| G6 | Filling whole missing days (C1) and adjusting Uri load (C3) | Uri: H6. Incomplete years are dropped (H1) |

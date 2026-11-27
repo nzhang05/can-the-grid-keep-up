@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
@@ -178,4 +179,50 @@ def v2_supply_by_fuel(proj: pd.DataFrame | None = None) -> go.Figure:
         template="simple_white", legend={"orientation": "h", "y": -0.15}, margin={"t": 90},
     )
     fig.update_yaxes(gridcolor="#e5e7eb", showgrid=True)
+    return fig
+
+
+SUPPLY_SHADES = {"low": "#93c5fd", "mid": "#2563eb", "high": "#1e3a8a"}   # one hue, ordered
+
+
+def v3_adequacy(summary: pd.DataFrame | None = None) -> go.Figure:
+    """Expected loss-of-load events per year (mid demand), by supply scenario, vs the standard."""
+    from gridkeepup import adequacy
+
+    s = adequacy.load_results("adequacy_summary") if summary is None else summary
+    a = adequacy.AdequacyAssumptions.from_config()
+    s = s[s["demand"] == "mid"]
+    mid = s[s["supply"] == "mid"].set_index("year")
+    fig = go.Figure()
+    for scen in ("low", "mid", "high"):
+        d = s[s["supply"] == scen].sort_values("year")
+        fig.add_trace(go.Scatter(
+            x=d["year"], y=d["lole"], mode="lines+markers", name=f"{scen.title()} supply",
+            line={"color": SUPPLY_SHADES[scen], "width": 2 if scen != "mid" else 3},
+            marker={"size": 8},
+            hovertemplate=f"{scen.title()} supply %{{x}}: %{{y:.2f}} events / year<extra></extra>"))
+        last = d.iloc[-1]
+        fig.add_annotation(x=last["year"], y=float(np.log10(last["lole"])), xanchor="left",
+                           xshift=8, showarrow=False, text=f"{scen.title()} supply",
+                           font={"color": "#374151", "size": 12})
+    fig.add_hline(y=a.standard, line={"color": PEAK_COLOR, "dash": "dash", "width": 1.5})
+    fig.add_annotation(x=s["year"].min(), y=float(np.log10(a.standard)), yshift=-12,
+                       xanchor="left", showarrow=False, font={"color": "#374151", "size": 12},
+                       text="Texas standard: 0.1 (one event in 10 years)")
+    worst = mid["lole"].idxmax()
+    share = mid["winter_share"].mean()
+    fig.update_layout(
+        title={"text": f"Mid case: {mid['lole'].min():.2f}-{mid['lole'].max():.2f} expected "
+                       f"rotating-outage events a year, above Texas's 0.1 standard "
+                       f"(tightest: {worst})"
+                       f"<br><sup>Mid data center demand. Expected loss-of-load events per "
+                       f"year across weather years 2019-2023; {share:.0%} of the mid-case risk "
+                       f"is in winter storms</sup>", "x": 0.01},
+        yaxis={"type": "log", "title": "Loss-of-load events per year (log scale)",
+               "gridcolor": "#e5e7eb", "tickvals": [0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20],
+               "ticktext": ["0.05", "0.1", "0.2", "0.5", "1", "2", "5", "10", "20"]},
+        xaxis={"dtick": 1, "title": None, "range": [s["year"].min() - 0.3,
+                                                    s["year"].max() + 0.8]},
+        template="simple_white", legend={"orientation": "h", "y": -0.15}, margin={"t": 90},
+    )
     return fig

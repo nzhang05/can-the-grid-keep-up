@@ -2,7 +2,7 @@
 
 import streamlit as st
 
-from gridkeepup import charts, demand, manual, supply
+from gridkeepup import adequacy, charts, demand, manual, supply
 
 st.set_page_config(page_title="Can the grid keep up?", layout="wide")
 
@@ -10,7 +10,7 @@ st.title("Can the grid keep up?")
 st.markdown(
     "How much power will Texas's planned data centers need, where will it come from, "
     "and can the ERCOT grid serve them in every hour? An open, reproducible model. "
-    "**v2: demand and supply.** Hourly adequacy arrives in v3."
+    "**v3: demand, supply and the hourly test.** Flexibility arrives in v4."
 )
 
 st.header("1. The queue")
@@ -57,3 +57,26 @@ st.caption(
 )
 with st.expander("Capacity by scenario"):
     st.dataframe(supply.totals(supply.project()), width="stretch")
+
+st.header("4. Can the grid keep up, hour by hour?")
+summary = adequacy.load_results("adequacy_summary")
+if summary.empty:
+    st.info("Run `uv run gridkeepup adequacy` to produce the hourly results.")
+else:
+    st.plotly_chart(charts.v3_adequacy(summary), width="stretch")
+    st.caption(
+        "Every hour of five weather years (2019-2023), replayed on each future year's grid: "
+        "load scaled to today and grown, plus new data centers; wind and solar from each "
+        "hour's weather; batteries shaving the tightest hours; gas, coal and nuclear plants "
+        "failing at random at their forced outage rates, with extra outages in winter storms. "
+        "A Uri-like storm is weighted at its 2% yearly chance. A calibration term (5.6 GW of "
+        "resources the model can't see) makes the model match ERCOT's 2019-2023 emergency "
+        "record. Assumptions: docs/adequacy-assumptions.md."
+    )
+    room = adequacy.load_results("adequacy_headroom")
+    if not room.empty:
+        st.subheader("How much round-the-clock load fits at the standard?")
+        st.caption("GW of flat load the grid could add (+) or would need to drop in risky "
+                   "hours (-) to reach 0.1 loss-of-load events a year.")
+        st.dataframe(room.pivot_table(index=["demand", "supply"], columns="year",
+                                      values="headroom_gw").round(1), width="stretch")

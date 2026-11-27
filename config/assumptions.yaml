@@ -158,6 +158,46 @@ supply:                   # v2: decided 2026-11-27 (rationale in docs/supply-ass
       Other: 1.0    # nuclear, hydro, other: too few queued projects to matter
   thermal_forced_outage_rate: null   # TODO v3
 
-adequacy:                 # v3
-  non_datacenter_load_growth: null   # TODO v3: annual growth of everything else
-  reliability_standard: "1 day in 10 years"
+adequacy:                 # v3 (proposed 2026-11-27): hourly test, docs/adequacy-assumptions.md
+  reference_year: 2026      # weather-year load is scaled to this year's level, then grown
+  # Load: each weather year's hourly load x (1 + peak_growth)^(2026 - weather year). Derived:
+  # ERCOT annual peak 2019 (EIA-930) to 2026 (record 91,134 MW).
+  peak_growth_to_reference: 0.029
+  # Growth of everything except new data centers from 2026, all hours. Mid derived: same
+  # peaks with 2026 minus the 4,370 MW observed peak of approved large loads; low/high = mid
+  # -/+ 1 point (judgment).
+  non_datacenter_load_growth: {low: 0.012, mid: 0.022, high: 0.032}
+  datacenter_profile: flat  # new data center load = v1 peak_gw in every hour
+  uri_rebuild: true         # rebuild Uri load-shed hours: 14 Feb 2021 shape, scaled to
+                            # ERCOT's 76,819 MW estimate of demand without load shed
+  reserve_mw: 1500          # ERCOT sheds firm load (EEA3) to keep 1,500 MW of reserves
+  storage_round_trip: 0.82  # EIA, US utility-scale battery fleet (2019)
+  winter_months: [12, 1, 2] # net winter capacity in these months, net summer otherwise
+  thermal_forced_outage_rate:   # NERC 2026 State of Reliability (2025 data) unless noted
+    Natural Gas Fired Combined Cycle: 0.057
+    Conventional Steam Coal: 0.141
+    Petroleum Coke: 0.141
+    Nuclear: 0.03           # judgment: no current NERC figure found; 5 GW, small effect
+    default: 0.092          # all conventional generation (other gas, oil, biomass, new gas)
+  new_thermal_unit_mw: 200  # planned thermal additions modelled as units of this size
+  chp_counted_as: private_use_network   # CHP units (11.7 GW) replaced by ERCOT's PUN
+                                        # net export: 3,194 MW summer / 4,283 MW winter
+  winter_storms:            # extra thermal outages on top of normal forced outages
+    uri:     {start: "2021-02-14 06:00", end: "2021-02-20 06:00", thermal_out_mw: 14000}
+    elliott: {start: "2022-12-22 12:00", end: "2022-12-26 06:00", thermal_out_mw: 14000}
+    heather: {start: "2024-01-14 06:00", end: "2024-01-18 06:00", thermal_out_mw: 7000}
+    # Uri uses Elliott's level: generators winterized after 2021 (SB 3); ERCOT's own storm
+    # scenario also starts from Elliott outages. Extra = thermal_out_mw - expected normal outage.
+  # Resources the model does not see (DC tie imports, emergency demand response and load
+  # resources, conservation, lower outages at peak than the annual average). Calibrated: the
+  # MW that makes the model reproduce ERCOT's emergency record 2019-2023 (outside Uri): 3 days
+  # with an Energy Emergency Alert (EEA1 twice in Aug 2019, EEA2 on 6 Sep 2023), EEA1 then
+  # declared when reserves fell below 2,300 MW. Recomputed by `gridkeepup derive`.
+  unmodeled_resources_mw: 5600
+  calibration: {years: [2019, 2020, 2021, 2022, 2023], eea_days: 3, eea_reserve_mw: 2300}
+  rare_events:              # weighted by their annual chance instead of 1 in N weather years
+    uri: {start: "2021-02-14 06:00", end: "2021-02-20 06:00", annual_probability: 0.02}
+    # Texas state climatologist: about a 1 in 50 chance each winter of a Uri-like storm
+  copt_step_mw: 10
+  charge_safe_quantile: 0.001   # batteries charge only if thermal at this low quantile covers it
+  reliability_standard: 0.1     # LOLE, loss-of-load events per year (PUCT, 16 TAC 25.508)

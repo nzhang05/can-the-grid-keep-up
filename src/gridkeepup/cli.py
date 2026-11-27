@@ -149,12 +149,39 @@ def cmd_derive(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_adequacy(_: argparse.Namespace) -> int:
+    import pandas as pd
+
+    from gridkeepup import adequacy
+    if adequacy.weather_profiles().empty:
+        print("No hourly data. Run `gridkeepup fetch eia930` and `gridkeepup fetch eia860m`.")
+        return 1
+    out = adequacy.write_results()
+    s, room = out["adequacy_summary"], out["adequacy_headroom"]
+    a = adequacy.AdequacyAssumptions.from_config()
+    with pd.option_context("display.width", 160):
+        print(f"Expected loss-of-load events per year (standard: {a.standard}), weather years "
+              f"{sorted(out['adequacy_by_weather_year']['weather_year'].unique())}:")
+        print(s.pivot_table(index=["demand", "supply"], columns="year", values="lole")
+              .round(2).to_string())
+        print("\nShare of that risk in winter (Dec-Feb, incl. Uri-like storms), mid / mid:")
+        print(s[(s.demand == "mid") & (s.supply == "mid")].set_index("year")["winter_share"]
+              .round(2).to_string())
+        print("\nRound-the-clock load the grid could add (+) or would need to shed in risky "
+              "hours (-) to meet the standard, GW:")
+        print(room.pivot_table(index=["demand", "supply"], columns="year",
+                               values="headroom_gw").round(1).to_string())
+    print("\nwrote data/derived/adequacy_*.csv")
+    return 0
+
+
 def cmd_chart(args: argparse.Namespace) -> int:
     from gridkeepup import charts
     OUTPUTS_DIR.mkdir(exist_ok=True)
     figs = {"v0": ("v0_queue_vs_peak.html", charts.v0_queue_vs_peak),
             "v1": ("v1_demand_scenarios.html", charts.v1_demand_scenarios),
-            "v2": ("v2_supply_by_fuel.html", charts.v2_supply_by_fuel)}
+            "v2": ("v2_supply_by_fuel.html", charts.v2_supply_by_fuel),
+            "v3": ("v3_adequacy.html", charts.v3_adequacy)}
     name, make = figs[args.name]
     path = OUTPUTS_DIR / name
     make().write_html(path, include_plotlyjs="cdn")
@@ -177,8 +204,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("crosscheck").set_defaults(fn=cmd_crosscheck)
     sub.add_parser("supply").set_defaults(fn=cmd_supply)
     sub.add_parser("derive").set_defaults(fn=cmd_derive)
+    sub.add_parser("adequacy").set_defaults(fn=cmd_adequacy)
     chart = sub.add_parser("chart")
-    chart.add_argument("name", choices=["v0", "v1", "v2"])
+    chart.add_argument("name", choices=["v0", "v1", "v2", "v3"])
     chart.set_defaults(fn=cmd_chart)
     args = parser.parse_args(argv)
     try:

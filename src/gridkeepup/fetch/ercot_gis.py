@@ -60,7 +60,7 @@ def read_projects(path: Path) -> pd.DataFrame:
     df.columns = [str(c).strip() for c in raw.iloc[header]]
     df = df[df["INR"].notna() & df["Fuel"].notna()]
     for col in ("Projected COD", "IA Signed", "Construction Start", "Approved for Energization",
-                "Approved for Synchronization"):
+                "Approved for Synchronization", "Screening Study Started", "FIS Requested"):
         df[col] = pd.to_datetime(df[col], errors="coerce")
     out = pd.DataFrame({
         "inr": df["INR"].astype(str),
@@ -69,6 +69,9 @@ def read_projects(path: Path) -> pd.DataFrame:
         "fuel": [fuel_group(f, t) for f, t in zip(df["Fuel"], df["Technology"], strict=True)],
         "stage": df.apply(stage, axis=1),
         "cod_year": df["Projected COD"].dt.year,
+        "ia_year": df["IA Signed"].dt.year,
+        # queue entry: screening study start (LBNL's queue date), else full study request
+        "queue_year": df["Screening Study Started"].fillna(df["FIS Requested"]).dt.year,
         "mw_nameplate": pd.to_numeric(df["Capacity (MW)"], errors="coerce").fillna(0.0),
     })
     out.attrs["source_file"] = path.name

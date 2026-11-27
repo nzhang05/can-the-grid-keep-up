@@ -76,6 +76,8 @@ class SupplyAssumptions:
     gis_probability: dict                      # stage -> scenario -> P, or "signed" -> fuel -> ...
     gis_delay_years: dict[str, dict[str, int]]
     summer_ratio: dict[str, float]
+    gis_timing: str = "curves"
+    tax_credit: dict | None = None
 
     @classmethod
     def from_config(cls, cfg: dict | None = None) -> SupplyAssumptions:
@@ -91,7 +93,9 @@ class SupplyAssumptions:
                    bool(g.get("enabled", True)), int(g["first_year"]), g["stage_probability"],
                    {k: {sc: int(v) for sc, v in d.items()}
                     for k, d in g["stage_delay_years"].items()},
-                   {k: float(v) for k, v in g["summer_ratio"].items()})
+                   {k: float(v) for k, v in g["summer_ratio"].items()},
+                   str(g.get("timing", "curves")),
+                   g.get("tax_credit_factor"))
 
     @property
     def years(self) -> list[int]:
@@ -99,9 +103,41 @@ class SupplyAssumptions:
 
     def gis_p(self, stage: str, fuel: str, scenario: str) -> float:
         table = self.gis_probability[stage]
-        if stage == "signed":
+        if stage in CURVE_STAGES:
             table = table.get(fuel, table["Other"])
-        return float(table[scenario])
+        p = float(table[scenario])
+        tc = self.tax_credit
+        if tc and fuel in tc["fuels"] and stage in tc["stages"]:
+            p *= float(tc[scenario])
+        return p
+
+
+CURVE_STAGES = {"signed": ("signed", "ia_year"), "study": ("queue", "queue_year")}
+
+
+def load_curves(path=None) -> pd.DataFrame:
+    from gridkeepup.paths import DERIVED_DIR
+    path = path or DERIVED_DIR / "completion_curves.csv"
+    return pd.read_csv(path)
+
+
+def online_by(curve: pd.Series, age: int, years_ahead: int, level: float) -> float:
+    """P(online within ``years_ahead`` more years | not online at ``age``).
+
+    ``curve`` is cumulative share online by year k (index k). It is rescaled so its plateau
+    equals ``level`` (shape from history, level from the decided eventual odds), then
+    conditioned on not being online yet.
+    """
+    if years_ahead <= 0:
+        return 0.0
+    kmax = int(curve.index.max())
+    peak = float(curve.max())
+    if peak <= 0:
+        return 0.0
+    g = (curve / peak * level).clip(upper=1.0)
+    g_now = float(g.loc[min(max(age, 0), kmax)])
+    g_then = float(g.loc[min(max(age, 0) + years_ahead, kmax)])
+    return max(0.0, (g_then - g_now) / (1.0 - g_now)) if g_now < 1 else 0.0
 
 
 def _year(col: pd.Series) -> pd.Series:
@@ -125,7 +161,8 @@ def prepare(inventory: dict[str, pd.DataFrame]) -> tuple[pd.DataFrame, pd.DataFr
 
 
 def pipeline(inventory: dict[str, pd.DataFrame], gis: pd.DataFrame | None,
-             a: SupplyAssumptions, scenario: str) -> pd.DataFrame:
+             a: SupplyAssumptions, scenario: str,
+             curves: pd.DataFrame | None = None) -> pd.DataFrame:
     """Every new project with its source, stage, fuel, summer MW, P(built) and arrival year."""
     _, pl = prepare(inventory)
     unknown = set(pl["status_code"]) - set(a.probability)
@@ -145,20 +182,49 @@ def pipeline(inventory: dict[str, pd.DataFrame], gis: pd.DataFrame | None,
     })
     if not use_gis:
         return eia.reset_index(drop=True)
-    g = gis[gis["cod_year"] >= a.gis_first_year]
+    g = gis[gis["cod_year"] >= a.gis_first_year].copy()
     unknown = set(g["stage"]) - set(a.gis_probability)
     if unknown:
         raise ValueError(f"No probability configured for ERCOT GIS stages {sorted(unknown)}")
-    queue = pd.DataFrame({
+    g["mw"] = g["mw_nameplate"] * g["fuel"].map(lambda f: a.summer_ratio.get(f, 1.0))
+    timed = g["stage"].isin(CURVE_STAGES) if a.gis_timing == "curves" else g["stage"].isna()
+    fixed = g[~timed]
+    parts = [eia, pd.DataFrame({
         "source": "ERCOT GIS",
-        "stage": g["stage"],
-        "fuel": g["fuel"],
-        "mw": g["mw_nameplate"] * g["fuel"].map(lambda f: a.summer_ratio.get(f, 1.0)),
-        "p": [a.gis_p(st, f, scenario) for st, f in zip(g["stage"], g["fuel"], strict=True)],
-        "arrives": g["cod_year"] + g["stage"].map(
-            {k: v[scenario] for k, v in a.gis_delay_years.items()}),
-    })
-    return pd.concat([eia, queue], ignore_index=True)
+        "stage": fixed["stage"],
+        "fuel": fixed["fuel"],
+        "mw": fixed["mw"],
+        "p": [a.gis_p(st, f, scenario) for st, f in zip(fixed["stage"], fixed["fuel"],
+                                                          strict=True)],
+        "arrives": fixed["cod_year"] + fixed["stage"].map(
+            {k: v[scenario] for k, v in a.gis_delay_years.items()}).astype(float),
+    })]
+    if timed.any():
+        parts.append(_curve_timed(g[timed], a, scenario, curves))
+    return pd.concat(parts, ignore_index=True)
+
+
+def _curve_timed(g: pd.DataFrame, a: SupplyAssumptions, scenario: str,
+                 curves: pd.DataFrame | None) -> pd.DataFrame:
+    """One row per project and arrival year, with that year's increment in P(online)."""
+    curves = load_curves() if curves is None else curves
+    lookup = {key: grp.set_index("k")["share"]
+              for key, grp in curves.groupby(["basis", "fuel"])}
+    rows = []
+    for r in g.itertuples(index=False):
+        basis, start_col = CURVE_STAGES[r.stage]
+        curve = lookup.get((basis, r.fuel), lookup[(basis, "All")])
+        start = getattr(r, start_col)
+        age = a.snapshot_year - int(start) if pd.notna(start) else 0
+        level = a.gis_p(r.stage, r.fuel, scenario)
+        prev = 0.0
+        for year in range(a.snapshot_year + 1, a.end_year + 1):
+            p = online_by(curve, age, year - a.snapshot_year, level) if year >= r.cod_year else 0.0
+            if p > prev:
+                rows.append({"source": "ERCOT GIS", "stage": r.stage, "fuel": r.fuel,
+                             "mw": r.mw, "p": p - prev, "arrives": year})
+                prev = p
+    return pd.DataFrame(rows, columns=["source", "stage", "fuel", "mw", "p", "arrives"])
 
 
 def project(inventory: dict[str, pd.DataFrame] | None = None,

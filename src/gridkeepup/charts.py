@@ -152,6 +152,8 @@ def v2_supply_by_fuel(proj: pd.DataFrame | None = None) -> go.Figure:
     by_fuel_growth = (mid.loc[last] - today.reindex(mid.columns, fill_value=0.0)) \
         .sort_values(ascending=False)
     top = ", ".join(f"{f.lower()} +{v:.0f}" for f, v in by_fuel_growth.head(3).items() if v >= 1)
+    src = proj.attrs.get("sources", "EIA-860M")
+    src = "EIA-860M to 2027, ERCOT queue from 2028" if "GIS" in src else "EIA-860M planned projects"
 
     fig = go.Figure()
     for fuel in [f for f in supply.FUEL_ORDER if f in mid.columns]:
@@ -170,7 +172,7 @@ def v2_supply_by_fuel(proj: pd.DataFrame | None = None) -> go.Figure:
         barmode="stack",
         title={"text": f"ERCOT capacity could grow from {today_total:.0f} GW today to "
                        f"{tot.loc[last, 'mid']:.0f} GW by {last} (mid case)"
-                       f"<br><sup>Net summer GW, expected values from EIA-860M planned projects. "
+                       f"<br><sup>Net summer GW, expected values: {src}. "
                        f"Biggest gains since today: {top} GW</sup>", "x": 0.01},
         yaxis_title="Installed capacity (GW, net summer)", xaxis={"dtick": 1, "title": None},
         template="simple_white", legend={"orientation": "h", "y": -0.15}, margin={"t": 90},

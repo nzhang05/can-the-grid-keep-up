@@ -135,8 +135,12 @@ def cmd_derive(_: argparse.Namespace) -> int:
         return 1
     for d in derived:
         print(f"{d.key} = {d.value:g}\n    inputs: {d.inputs}\n    method: {d.method}")
-    derive.write_markdown(derived, derive.informational(lbnl.load_ercot()))
-    print("\nwrote docs/derived-values.md")
+    e = lbnl.load_ercot()
+    if not e.empty:
+        derive.write_curves(e)
+        print(f"\nwrote data/derived/{derive.CURVES_PATH.name}")
+    derive.write_markdown(derived, derive.informational(e))
+    print("wrote docs/derived-values.md")
     bad = derive.mismatches(derived)
     if bad:
         print("\nConfig does not match the data:\n  " + "\n  ".join(bad))

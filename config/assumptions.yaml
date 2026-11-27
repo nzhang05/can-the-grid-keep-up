@@ -109,28 +109,47 @@ supply:                   # v2: decided 2026-11-27 (rationale in docs/supply-ass
   # planned projects are used up to the year before. Avoids double counting: the two lists
   # name projects differently and cannot be merged reliably.
   ercot_gis:
-    enabled: false            # off until queue timing is calibrated: applying eventual completion
-                              # odds at projected online dates adds ~44 GW in 2028, 3x ERCOT's record
+    enabled: true
     first_year: 2028
+    # Timing for queue projects with a signed agreement or in study: the chance a project is
+    # online by year Y follows ERCOT's history (data/derived/completion_curves.csv, written by
+    # `gridkeepup derive`): shape from the curve for years since signing / queue entry, level
+    # from the eventual odds below, conditional on not being online yet at the snapshot, and
+    # never before the project's projected online year. (Applying eventual odds at projected
+    # dates instead added 44 GW in 2028, 3x ERCOT's record year.)
+    timing: curves
+    # Federal tax credits for wind and solar end for projects that start construction after
+    # 4 Jul 2026 and enter service after 2027 (2025 budget law, "OBBBA"). History has no such
+    # break, so queue wind/solar not yet under construction get their odds multiplied by a
+    # bracket: low = none proceed, mid = half, high = all (as if history still applied).
+    # Storage and gas keep their credits/economics, so they are not affected.
+    tax_credit_factor:
+      fuels: [Solar, Wind]
+      stages: [signed, study]
+      low: 0.0
+      mid: 0.5
+      high: 1.0
     stage_probability:
       synchronized: {low: 0.98, mid: 0.99, high: 1.00}   # as EIA status TS
       energized:    {low: 0.98, mid: 0.99, high: 1.00}   # as EIA status TS
       construction: {low: 0.80, mid: 0.90, high: 0.95}   # as EIA status U
-      study:        {low: 0.10, mid: 0.20, high: 0.30}   # below the 24% eventual completion: must
-                                                         # still sign and build in time for 2030
-      signed:       # derived from ERCOT history (LBNL): low = operating, mid = + half still in
-                    # progress, high = + all still in progress; Other = all-fuel rate
+      study:        # eventual odds, derived from all ERCOT requests 2000-2020 (LBNL), same rule
+        Wind:    {low: 0.28, mid: 0.31, high: 0.34}
+        Gas:     {low: 0.27, mid: 0.29, high: 0.32}
+        Solar:   {low: 0.23, mid: 0.34, high: 0.46}
+        Storage: {low: 0.13, mid: 0.39, high: 0.66}
+        Other:   {low: 0.24, mid: 0.32, high: 0.39}
+      signed:       # eventual odds, derived from ERCOT history (LBNL): low = operating, mid = +
+                    # half still in progress, high = + all still in progress; Other = all-fuel rate
         Wind:    {low: 0.69, mid: 0.74, high: 0.80}
         Gas:     {low: 0.54, mid: 0.56, high: 0.57}
         Solar:   {low: 0.50, mid: 0.67, high: 0.83}
         Storage: {low: 0.42, mid: 0.66, high: 0.90}
         Other:   {low: 0.56, mid: 0.64, high: 0.73}
-    stage_delay_years:
+    stage_delay_years:      # only for stages not timed by the curves
       synchronized: {low: 0, mid: 0, high: 0}
       energized:    {low: 0, mid: 0, high: 0}
       construction: {low: 1, mid: 0, high: 0}
-      signed:       {low: 1, mid: 0, high: 0}
-      study:        {low: 2, mid: 1, high: 0}
     summer_ratio:   # derived: ERCOT reports nameplate MW; net summer / nameplate of today's fleet
       Gas: 0.89
       Solar: 1.0

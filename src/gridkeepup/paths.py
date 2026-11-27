@@ -8,6 +8,7 @@ DATA_DIR = ROOT / "data"
 RAW_DIR = DATA_DIR / "raw"          # downloaded files (git-ignored)
 MANUAL_DIR = DATA_DIR / "manual"    # hand-entered inputs with sources (committed)
 PROCESSED_DIR = DATA_DIR / "processed"
+DERIVED_DIR = DATA_DIR / "derived"      # tables computed from raw data (committed)
 DB_PATH = DATA_DIR / "grid.duckdb"
 OUTPUTS_DIR = ROOT / "outputs"
 

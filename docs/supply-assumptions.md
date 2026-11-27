@@ -1,7 +1,7 @@
 # Supply assumptions (v2)
 
-Status: **decided 2026-11-27**, except the timing of ERCOT queue projects, which failed a
-sanity check and is switched off until fixed (see "Open: queue timing" below). Values live in
+Status: **decided 2026-11-27**, including the timing of ERCOT queue projects (time-based
+completion curves, see "Queue timing" below). Values live in
 [`config/assumptions.yaml`](../config/assumptions.yaml) under `supply`; every assumption is in
 the [register](assumptions.md) (section F). Values computed from data are recomputed by
 `uv run gridkeepup derive`, which writes inputs and arithmetic to
@@ -11,7 +11,7 @@ the [register](assumptions.md) (section F). Values computed from data are recomp
 
 How much generation and storage will ERCOT have each year to 2030, by fuel?
 
-## Current result (EIA-860M only, ERCOT-based odds)
+## Current result (EIA-860M to 2027, ERCOT queue from 2028)
 
 Total installed capacity, net summer GW (expected values):
 
@@ -19,25 +19,67 @@ Total installed capacity, net summer GW (expected values):
 | --- | --- | --- | --- |
 | Today (Oct 2026) | 176.5 | 176.5 | 176.5 |
 | 2026 (year end) | 185.0 | 188.9 | 189.2 |
-| 2028 | 198.1 | 205.3 | 214.7 |
-| 2030 | 208.6 | 215.4 | 222.0 |
+| 2027 | 188.8 | 198.7 | 204.2 |
+| 2028 | 205.2 | 225.8 | 242.4 |
+| 2029 | 222.0 | 254.5 | 292.8 |
+| 2030 | 234.8 | 279.8 | 337.3 |
 
-Mid case 2030 vs today: solar +22.1 GW, storage +10.9 GW (52 GWh), gas +3.7, wind +2.6,
-coal -0.6, nuclear flat. The 2026 jump is the 9.4 GW already built and awaiting commercial
-operation.
+Mid case by fuel, GW (year end):
 
-**2029-2030 is understated** because most projects for those years are not reported to EIA
-yet. ERCOT's queue from 2028 (table 2) fixes that once its timing is calibrated.
+| Fuel | 2026 | 2028 | 2030 |
+| --- | --- | --- | --- |
+| Gas | 62.2 | 67.3 | 75.0 |
+| Wind | 41.7 | 45.5 | 50.0 |
+| Solar | 42.7 | 55.5 | 66.9 |
+| Batteries | 22.0 | 37.8 | 68.0 |
+| Coal | 13.7 | 13.1 | 13.1 |
+| Nuclear | 5.0 | 5.0 | 5.0 |
 
-## Open: queue timing
+The 2026 jump is the 9.4 GW already built and awaiting commercial operation.
 
-With the queue switched on as decided, mid-case capacity reaches 299 GW in 2030 and the model
-adds 44 GW in 2028 alone, about three times ERCOT's record year (15.3 GW in 2025; 13.7 GW in
-2024). The cause: ERCOT's completion rates are *eventual*. Applying them at each project's
-projected online date crams years of building into 2028.
+### How plausible is this?
 
-ERCOT history (LBNL, agreements signed to 2024, cohorts with enough follow-up), share of
-capacity online within k years of signing an agreement:
+Mid-case additions are 27-29 GW a year in 2028-2030, against ERCOT's record of 15.3 GW
+(2025); the low case (13-17 GW a year) is close to the record pace. Three checks:
+
+- **The timing method is not what makes it high.** Replayed on ERCOT's queue as it stood at
+  the end of 2019, 2020 and 2021, the same method predicted 17-22 GW over the next four years;
+  ERCOT actually added 23-35 GW from those queues (actual / model 1.35-1.77). If anything it
+  runs low. Numbers in [derived-values.md](derived-values.md).
+- **The queue is what makes it high.** ERCOT's queue is about twice the size it was in 2021
+  (446 GW in the October 2026 GIS report, 162 GW at end-2021). The model assumes today's
+  projects complete at historical rates; it does not assume a limit on how much ERCOT can
+  connect or developers can build in a year. That limit is unknown and is the largest
+  uncertainty in v2.
+- **Batteries are the swing.** Mid case reaches 55 GW of batteries by 2029. Modo Energy's
+  outlook for ERCOT is 40-55 GW operational by 2029, depending on attrition, so mid sits at
+  the top of their range. [Modo Energy, Feb 2026](https://modoenergy.com/research/en/ercot-battery-buildout-2025-annual-report)
+
+These are installed GW. Solar and batteries count for much less in the tightest evening
+hours; v3 tests that hour by hour.
+
+## Queue timing (decided)
+
+Eventual completion odds applied at each project's projected online date put 44 GW of
+additions in 2028 alone, three times ERCOT's record. ERCOT's history shows completion spreads
+over several years after an agreement. So, for each queue project with a signed agreement or
+in study:
+
+1. **Curve (shape).** From ERCOT history (LBNL), the share of capacity online within k years
+   of signing an agreement (signed projects) or entering the queue (study-only projects), by
+   fuel, k = 0 to 12. Only cohorts with k full years of follow-up count, capacity-weighted,
+   made non-decreasing; a year with under 0.5 GW of sample repeats the previous year.
+   Fuels other than wind, gas, solar and batteries use the all-fuel curve. Written by
+   `gridkeepup derive` to [`data/derived/completion_curves.csv`](../data/derived/completion_curves.csv)
+   (committed; a test checks it against the data).
+2. **Level.** The curve is rescaled so its plateau equals the stage's eventual odds (table 3).
+3. **Age, conditional.** A project that signed in 2023 is 3 years in at the 2026 snapshot and
+   not online yet; its chance of being online by year Y is
+   (G(3 + Y - 2026) - G(3)) / (1 - G(3)), where G is the rescaled curve.
+4. **Never before its projected date.** The chance is 0 before the project's projected
+   online year; capacity that would have arrived earlier arrives in that year.
+
+Share online within k years of signing (curve before rescaling):
 
 | Fuel | 1 year | 2 years | 3 years | 4 years |
 | --- | --- | --- | --- | --- |
@@ -46,10 +88,20 @@ capacity online within k years of signing an agreement:
 | Batteries | 1% | 3% | 16% | 75% |
 | Wind | 2% | 24% | 42% | 49% |
 
-Proposed fix: for each queue project, the chance it is online by year Y comes from these
-curves, based on how long ago it signed (or entered the queue, for study-only projects) and
-conditional on it not being online yet. The queue stays off (`enabled: false`) until decided,
-so published results use EIA-860M only.
+Thin sample: the battery curve from year 4 on rests on 0.7 GW of agreements or less (the
+battery boom is recent). Full table with sample sizes in [derived-values.md](derived-values.md).
+
+### Tax-credit cliff for wind and solar
+
+Federal tax credits end for wind and solar projects that start construction after 4 July 2026
+and enter service after 2027 (the 2025 budget law, OBBBA). Projects that started construction
+in time keep them. Batteries and gas are not affected. ERCOT's history has no such break, and
+the GIS report does not show which projects started construction for tax purposes (ERCOT notes
+construction dates are not yet fully reported). So queue wind and solar not yet under
+construction (signed or study) get their odds multiplied by a bracket:
+**low 0 (none proceed), mid 0.5 (half), high 1 (all, as if history still applied).** This is a
+judgment bracket, not derived. Effect on mid 2030: -21.5 GW (solar -14.9, wind -6.6).
+[Kirkland & Ellis, Aug 2025](https://www.kirkland.com/publications/kirkland-alert/2025/08/one-big-beautiful-bill-act-brings-big-changes-to-green-energy-tax-credits)
 
 ## Evidence
 
@@ -113,7 +165,7 @@ Chance a planned unit reaches operation, by EIA status:
 | L | Approvals pending | 30% | 40% | 55% | 2 / 1 / 0 | Between T and P (was 45%) |
 | P | Planned, no approvals | 15% | **24%** | 35% | 2 / 1 / 1 | ERCOT request completion (was 25%) |
 
-### 2. Source split by year (decided; implemented, switched off pending queue timing)
+### 2. Source split by year (decided)
 
 EIA and ERCOT list many of the same projects under different names: matching by name and
 county links only about 10% of them, so the lists cannot simply be merged. Proposal:
@@ -128,22 +180,24 @@ Measured risk: name and county matching finds 18 projects (3.5 GW nameplate) tha
 for 2026-2027 and ERCOT lists for 2028, which would count twice. Small next to the pipeline;
 recorded in the register (F17).
 
-### 3. ERCOT GIS projects from 2028 (decided; timing open)
+### 3. ERCOT GIS projects from 2028 (decided)
 
-Stage from the report's milestone dates. For projects with a signed agreement, odds come
+Stage from the report's milestone dates. Eventual odds for signed and study-only projects come
 straight from ERCOT's history with one rule: **low = share already operating, mid = operating
-+ half of still-in-progress, high = operating + all still-in-progress.**
++ half of still-in-progress, high = operating + all still-in-progress.** Signed uses projects
+with agreements signed 2000-2022; study uses all requests submitted 2000-2020.
 
-| Stage | Wind | Gas | Solar | Batteries | Delay (low / mid / high) |
+| Stage | Wind | Gas | Solar | Batteries | Timing |
 | --- | --- | --- | --- | --- | --- |
-| Construction started | 80 / 90 / 95% | same | same | same | 1 / 0 / 0 |
-| Agreement signed | 69 / 74 / 80% | 54 / 56 / 57% | 50 / 67 / 83% | 42 / 66 / 90% | 1 / 0 / 0 |
-| Study only | 10 / 20 / 30% | same | same | same | 2 / 1 / 0 |
+| Synchronized / energized | 98 / 99 / 100% | same | same | same | Projected date |
+| Construction started | 80 / 90 / 95% | same | same | same | Projected date, +1 / 0 / 0 years |
+| Agreement signed | 69 / 74 / 80% | 54 / 56 / 57% | 50 / 67 / 83% | 42 / 66 / 90% | Curves (above) |
+| Study only | 28 / 31 / 34% | 27 / 29 / 32% | 23 / 34 / 46% | 13 / 39 / 66% | Curves (above) |
 
-Study only sits below ERCOT's 24% eventual completion because a project still in study must
-also sign an agreement and build (1.8 to 3.3 years) to make 2030.
-
-Other fuels in the queue (nuclear, hydro, other) use the all-ERCOT rate: 56 / 64 / 73%.
+Other fuels in the queue (nuclear, hydro, other) use the all-ERCOT rates: signed 56 / 64 / 73%,
+study 24 / 32 / 39%. Wind and solar signed and study odds are then multiplied by the
+tax-credit bracket (0 / 0.5 / 1). Study-only odds replace the earlier 10 / 20 / 30%
+placeholder: timing is now handled by the curves, so the level is the eventual rate.
 
 Capacity conversion: ERCOT reports nameplate MW. Each fuel's ratio is net summer MW / nameplate
 MW of today's operating fleet (EIA-860M): gas 62,175 / 69,930 = 0.89; solar 1.00; wind 1.00;
@@ -172,4 +226,6 @@ batteries 0.99.
 - [x] ERCOT GIS stage odds and the low / mid / high rule (table 3)
 - [x] 1.7-hour duration for planned batteries, nameplate-to-summer conversion for ERCOT MW;
   every derived value states its inputs and arithmetic (derived-values.md)
-- [ ] Queue timing: time-based completion curves from ERCOT history (open)
+- [x] Queue timing: time-based completion curves from ERCOT history; study-only odds derived
+  by fuel; queue switched on
+- [x] Tax-credit bracket for queue wind and solar not yet under construction (0 / 0.5 / 1)

@@ -95,3 +95,35 @@ def odds_from_shares(shares: pd.DataFrame) -> pd.DataFrame:
         "mid": shares["operational"] + shares["active"] / 2,
         "high": shares["operational"] + shares["active"],
     }).round(2)
+
+
+CURVE_MAX_YEARS = 12
+CURVE_MIN_SAMPLE_GW = 0.5   # below this, a year's estimate is too thin: carry the last value
+
+
+def completion_curve(e: pd.DataFrame, start_col: str, data_year: int = 2025,
+                     max_years: int = CURVE_MAX_YEARS,
+                     min_sample_gw: float = CURVE_MIN_SAMPLE_GW) -> pd.DataFrame:
+    """Share of capacity online within k years of ``start_col`` (``ia_date`` or ``q_date``).
+
+    For each k, only cohorts that have had k full years to finish are used (start year <=
+    data_year - k), so recent starts never drag the curve down. Capacity-weighted. The curve
+    is made non-decreasing, and a k with less than ``min_sample_gw`` of capacity repeats the
+    previous value. Columns: fuel (Wind, Gas, Solar, Storage, All), k, share, sample_gw.
+    """
+    d = e[e[start_col].notna()].copy()
+    d["start_year"] = d[start_col].dt.year
+    d["years_to_online"] = (d["on_date"] - d[start_col]).dt.days / 365.25
+    rows = []
+    for fuel in list(FUELS.values()) + ["All"]:
+        f = d if fuel == "All" else d[d["fuel"] == fuel]
+        last = 0.0
+        for k in range(0, max_years + 1):
+            cohort = f[f["start_year"] <= data_year - k]
+            sample = cohort["mw"].sum() / 1000
+            if k > 0 and sample >= min_sample_gw:
+                done = cohort.loc[cohort["years_to_online"] <= k, "mw"].sum() / 1000
+                last = max(last, done / sample)
+            rows.append({"fuel": fuel, "k": k, "share": round(last, 4),
+                         "sample_gw": round(sample, 2)})
+    return pd.DataFrame(rows)
